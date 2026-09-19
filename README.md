@@ -27,3 +27,6 @@ Final generation prompt set, condensed without changing creative direction:
 - Brush: pale blush round-bristled cleansing brush, subtle rose-gold ring, power button, droplets, cream travertine plinth and soft studio light; no text or logos.
 - Hair: tortoiseshell brush with gold pins on flowing brunette hair, blush silk background and warm editorial light; no text, logos or UI.
 - Tools: rose quartz gua sha and pale pink roller with discreet rose-gold handle on blush ivory stone; soft natural shadows and empty space; no text or logos.
+
+## Identity refinement
+Original flowing S emblem with a diagonal separation, custom vector-drawn capitals, and ivory variants for dark surfaces. The primary wordmark is outlined and independent of installed fonts. Logo and icon checked at desktop, 390px and 320px layouts.
