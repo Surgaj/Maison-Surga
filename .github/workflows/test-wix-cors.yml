@@ -1,4 +1,4 @@
-name: Test Wix Browser CORS
+name: Test Maison Surga Browser
 on:
   workflow_dispatch:
   push:
@@ -8,15 +8,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Test OAuth CORS preflight
+      - name: Wait for Pages
+        run: sleep 20
+      - name: Test OAuth CORS
         run: |
           echo "=== OPTIONS /oauth2/token ==="
-          curl -i -X OPTIONS 'https://www.wixapis.com/oauth2/token' \
+          curl -sS -D - -o /dev/null -X OPTIONS 'https://www.wixapis.com/oauth2/token' \
             -H 'Origin: https://surgaj.github.io' \
             -H 'Access-Control-Request-Method: POST' \
-            -H 'Access-Control-Request-Headers: content-type' || true
-          echo "=== POST /oauth2/token ==="
-          curl -i 'https://www.wixapis.com/oauth2/token' \
-            -H 'Origin: https://surgaj.github.io' \
-            -H 'Content-Type: application/json' \
-            --data '{"clientId":"4a256781-4f9d-4ae4-a7f6-2bcb9589c2fb","grantType":"anonymous"}' || true
+            -H 'Access-Control-Request-Headers: content-type'
+      - name: Headless browser product page
+        run: |
+          google-chrome --headless --no-sandbox --disable-gpu \
+            --virtual-time-budget=8000 \
+            --dump-dom 'https://surgaj.github.io/Maison-Surga/product.html' \
+            > /tmp/product-dom.html 2> /tmp/chrome-errors.txt || true
+          echo "=== PRODUCT STATE ==="
+          grep -oE '£[0-9]+\.[0-9]{2}|Loading…|Unavailable|We could not load the live product options|Add to bag' /tmp/product-dom.html | head -30 || true
+          echo "=== CONSOLE/BROWSER ERRORS ==="
+          cat /tmp/chrome-errors.txt | tail -80 || true
