@@ -2,6 +2,7 @@
   const CLIENT_ID = '4a256781-4f9d-4ae4-a7f6-2bcb9589c2fb';
   const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
   const TOKEN_KEY = 'maisonSurgaWixVisitorV1';
+  const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
   const API_ROOT = 'https://www.wixapis.com';
 
   const parseJson = async response => {
@@ -88,12 +89,27 @@
     return data;
   };
 
+  const randomBase64Url = size => {
+    const bytes = new Uint8Array(size);
+    crypto.getRandomValues(bytes);
+    let binary = '';
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  };
+
+  const sha256Base64Url = async value => {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    let binary = '';
+    new Uint8Array(digest).forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  };
+
   const getCurrentCart = async () => {
     try {
       const data = await api('/ecom/v2/carts/current');
       return data.cart || null;
     } catch (error) {
-      if (error.status === 404) return null;
+      if ([404, 428].includes(error.status)) return null;
       throw error;
     }
   };
@@ -138,6 +154,89 @@
     return data.variants || [];
   };
 
+  const getMyMember = async () => {
+    try {
+      const data = await api('/members/v1/members/my');
+      return data.member || null;
+    } catch (error) {
+      if ([401, 403, 404].includes(error.status)) return null;
+      throw error;
+    }
+  };
+
+  const startLogin = async () => {
+    const redirectUri = new URL('auth-callback.html', location.href).href;
+    const verifier = randomBase64Url(48);
+    const challenge = await sha256Base64Url(verifier);
+    const state = randomBase64Url(24);
+    const returnTo = location.href.split('#')[0];
+
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, state, redirectUri, returnTo }));
+
+    const data = await api('/headless/v1/redirect-session', {
+      method: 'POST',
+      body: JSON.stringify({
+        auth: {
+          authRequest: {
+            redirectUri,
+            clientId: CLIENT_ID,
+            codeChallenge: challenge,
+            codeChallengeMethod: 'S256',
+            responseMode: 'fragment',
+            responseType: 'code',
+            scope: 'offline_access',
+            state
+          },
+          prompt: 'login'
+        }
+      })
+    });
+
+    const url = data?.redirectSession?.fullUrl;
+    if (!url) throw new Error('Wix login URL was not returned.');
+    location.href = url;
+  };
+
+  const completeLoginFromCallback = async () => {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const code = params.get('code');
+    const returnedState = params.get('state');
+    const error = params.get('error');
+    const stored = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+
+    if (error) throw new Error(params.get('error_description') || error);
+    if (!code || !stored?.verifier || !stored?.redirectUri) throw new Error('Missing login callback data.');
+    if (!returnedState || returnedState !== stored.state) throw new Error('Login state verification failed.');
+
+    await tokenRequest({
+      clientId: CLIENT_ID,
+      grantType: 'authorization_code',
+      redirectUri: stored.redirectUri,
+      code,
+      codeVerifier: stored.verifier
+    });
+
+    localStorage.removeItem(AUTH_KEY);
+    return stored.returnTo || new URL('index.html', location.href).href;
+  };
+
+  const logout = async () => {
+    const data = await api('/headless/v1/redirect-session', {
+      method: 'POST',
+      body: JSON.stringify({
+        logout: { clientId: CLIENT_ID },
+        callbacks: { postFlowUrl: location.href.split('#')[0] }
+      })
+    });
+    const url = data?.redirectSession?.fullUrl;
+    localStorage.removeItem(TOKEN_KEY);
+    if (!url) {
+      location.reload();
+      return;
+    }
+    location.href = url;
+  };
+
   const lineItemCount = cart => (cart?.lineItems || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
   const money = value => {
@@ -174,7 +273,7 @@
 
       const lines = (cart.lineItems || []).map(item => {
         const image = lineImage(item);
-        const price = money(item?.price?.amount ? item.price : item?.price);
+        const price = money(item?.price);
         const description = (item?.descriptionLines || [])
           .map(line => line?.plainText?.original || line?.plainText || '')
           .filter(Boolean)
@@ -219,6 +318,45 @@
     }
   };
 
+  const renderAccount = async () => {
+    const panel = document.getElementById('account-content');
+    if (!panel) return;
+    panel.innerHTML = '<div class="bag-loading">Checking your account…</div>';
+
+    try {
+      const member = await getMyMember();
+      if (!member) {
+        panel.innerHTML = `<p>Sign in with your Maison Surga member account.</p>
+          <button class="button dark account-login" type="button">Sign in securely <span>⟶</span></button>
+          <small class="account-note">Sign-in is securely handled by Wix.</small>`;
+        panel.querySelector('.account-login')?.addEventListener('click', async event => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          button.textContent = 'Opening sign in…';
+          try { await startLogin(); }
+          catch (error) {
+            button.disabled = false;
+            button.textContent = 'Sign in securely';
+            showNotice(error.message || 'Unable to open sign in.', 'error');
+          }
+        });
+        return;
+      }
+
+      const displayName = member.profile?.nickname || member.profile?.firstName || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
+      panel.innerHTML = `<div class="account-signed-in">
+          <span class="account-status">SIGNED IN</span>
+          <h3>Welcome, ${displayName}.</h3>
+          ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
+          <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
+        </div>`;
+      panel.querySelector('.account-logout')?.addEventListener('click', logout);
+    } catch (error) {
+      panel.innerHTML = '<p>We could not load your account right now.</p>';
+      console.error('[Maison Surga] account error', error);
+    }
+  };
+
   const showNotice = (message, type = 'success') => {
     let notice = document.getElementById('store-notice');
     if (!notice) {
@@ -243,6 +381,7 @@
     const selector = document.getElementById('variant-options');
     const price = document.getElementById('product-price');
     const compare = document.getElementById('product-compare-price');
+    const mobilePrice = document.getElementById('mobile-product-price');
     const button = document.getElementById('add-to-bag');
     if (!selector || !button) return;
 
@@ -270,7 +409,9 @@
         selector.querySelectorAll('.variant-choice').forEach(choice => {
           choice.setAttribute('aria-pressed', String(choice.dataset.variantId === selected.variant.variantId));
         });
-        if (price) price.textContent = money(selected.variant.price?.actualPrice);
+        const currentPrice = money(selected.variant.price?.actualPrice);
+        if (price) price.textContent = currentPrice;
+        if (mobilePrice) mobilePrice.textContent = currentPrice;
         if (compare) {
           const compareText = money(selected.variant.price?.compareAtPrice);
           compare.textContent = compareText;
@@ -303,7 +444,8 @@
           if (countEl) countEl.textContent = `(${lineItemCount(cart)})`;
           showNotice('Added to your beauty bag.');
           await renderBag();
-          document.getElementById('bag-dialog')?.showModal();
+          const dialog = document.getElementById('bag-dialog');
+          if (dialog && !dialog.open) dialog.showModal();
           document.body.classList.add('locked');
         } catch (error) {
           console.error('[Maison Surga] add to cart error', error);
@@ -332,6 +474,10 @@
       .catch(error => console.warn('[Maison Surga] initial cart unavailable', error));
   };
 
+  const initAccount = () => {
+    document.querySelector('[data-dialog="account-dialog"]')?.addEventListener('click', renderAccount);
+  };
+
   window.MaisonWix = {
     CLIENT_ID,
     STORES_APP_ID,
@@ -340,9 +486,15 @@
     addToCart,
     getCheckoutUrl,
     queryVariants,
+    getMyMember,
+    startLogin,
+    completeLoginFromCallback,
+    logout,
     lineItemCount,
     renderBag,
+    renderAccount,
     initBag,
+    initAccount,
     initProductPage
   };
 })();
