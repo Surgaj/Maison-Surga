@@ -3,6 +3,7 @@
   const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
   const TOKEN_KEY = 'maisonSurgaWixVisitorV1';
   const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
+  const CART_KEY = 'maisonSurgaWixCartV1';
   const API_ROOT = 'https://www.wixapis.com';
 
   const parseJson = async response => {
@@ -104,12 +105,23 @@
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
   };
 
+  const savedCart = () => {
+    try { return JSON.parse(localStorage.getItem(CART_KEY) || 'null'); }
+    catch { return null; }
+  };
+
+  const saveCart = cart => {
+    if (cart?.id && cart.orderPlaced !== true) localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    else if (!cart || cart.orderPlaced === true) localStorage.removeItem(CART_KEY);
+    return cart || null;
+  };
+
   const getCurrentCart = async () => {
     try {
       const data = await api('/ecom/v2/carts/current');
-      return data.cart || null;
+      return saveCart(data.cart || null);
     } catch (error) {
-      if ([404, 428].includes(error.status)) return null;
+      if ([404, 428].includes(error.status)) return savedCart();
       throw error;
     }
   };
@@ -127,8 +139,9 @@
         catalogItems: [{ catalogReference, quantity }]
       })
     });
-    window.dispatchEvent(new CustomEvent('surga:cart-updated', { detail: data.cart }));
-    return data.cart;
+    const cart = saveCart(data.cart || null);
+    window.dispatchEvent(new CustomEvent('surga:cart-updated', { detail: cart }));
+    return cart;
   };
 
   const getCheckoutUrl = async cartId => {
@@ -173,7 +186,7 @@
 
     localStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, state, redirectUri, returnTo }));
 
-    const data = await api('/headless/v1/redirect-session', {
+    const data = await api('/_api/redirects-api/v1/redirect-session', {
       method: 'POST',
       body: JSON.stringify({
         auth: {
@@ -221,7 +234,7 @@
   };
 
   const logout = async () => {
-    const data = await api('/headless/v1/redirect-session', {
+    const data = await api('/_api/redirects-api/v1/redirect-session', {
       method: 'POST',
       body: JSON.stringify({
         logout: { clientId: CLIENT_ID },
@@ -251,7 +264,7 @@
 
   const lineName = item => item?.productName?.original || item?.productName || item?.name || 'Maison Surga item';
 
-  const renderBag = async () => {
+  const renderBag = async (cartOverride = null) => {
     const panel = document.getElementById('bag-content');
     const countEl = document.querySelector('.bag-count');
     if (!panel) return;
@@ -259,7 +272,7 @@
     panel.innerHTML = '<div class="bag-loading">Loading your bag…</div>';
 
     try {
-      const cart = await getCurrentCart();
+      const cart = cartOverride || await getCurrentCart();
       const count = lineItemCount(cart);
       if (countEl) countEl.textContent = `(${count})`;
 
@@ -443,7 +456,7 @@
           const countEl = document.querySelector('.bag-count');
           if (countEl) countEl.textContent = `(${lineItemCount(cart)})`;
           showNotice('Added to your beauty bag.');
-          await renderBag();
+          await renderBag(cart);
           const dialog = document.getElementById('bag-dialog');
           if (dialog && !dialog.open) dialog.showModal();
           document.body.classList.add('locked');
@@ -491,6 +504,8 @@
     completeLoginFromCallback,
     logout,
     lineItemCount,
+    savedCart,
+    saveCart,
     renderBag,
     renderAccount,
     initBag,
