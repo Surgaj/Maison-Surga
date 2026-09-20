@@ -1,0 +1,22 @@
+name: Test Wix Browser CORS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/test-wix-cors.yml"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test OAuth CORS preflight
+        run: |
+          echo "=== OPTIONS /oauth2/token ==="
+          curl -i -X OPTIONS 'https://www.wixapis.com/oauth2/token' \
+            -H 'Origin: https://surgaj.github.io' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' || true
+          echo "=== POST /oauth2/token ==="
+          curl -i 'https://www.wixapis.com/oauth2/token' \
+            -H 'Origin: https://surgaj.github.io' \
+            -H 'Content-Type: application/json' \
+            --data '{"clientId":"4a256781-4f9d-4ae4-a7f6-2bcb9589c2fb","grantType":"anonymous"}' || true
