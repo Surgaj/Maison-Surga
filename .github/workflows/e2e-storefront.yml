@@ -69,6 +69,19 @@ jobs:
             });
             console.log('CHECKOUT_URL',checkoutHref);
             assert(/^https:\/\//.test(checkoutHref||''),'Wix checkout URL was not returned');
+            const checkoutPage=await browser.newPage();
+            const checkoutResponse=await checkoutPage.goto(checkoutHref,{waitUntil:'domcontentloaded',timeout:60000});
+            console.log('CHECKOUT_PAGE',{status:checkoutResponse?.status(),url:checkoutPage.url(),title:await checkoutPage.title()});
+            assert((checkoutResponse?.status()||500)<400,'Wix hosted checkout did not load');
+            assert(checkoutPage.url().includes('/checkout'),'Checkout handoff did not reach Wix checkout');
+            await checkoutPage.close();
+
+            await page.click('[data-cart-action="decrease"]');
+            await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(1)',{timeout:20000});
+            await page.click('[data-cart-action="remove"]');
+            await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(0)',{timeout:20000});
+            console.log('AFTER_REMOVE',await page.evaluate(()=>({bag:document.querySelector('.bag-count')?.textContent,content:document.querySelector('#bag-content')?.innerText})));
+            assert((await page.$('.bag-checkout'))===null,'Checkout button remained after cart emptied');
 
             await page.evaluate(()=>document.querySelector('#bag-dialog')?.close());
             await page.click('.hamburger');
@@ -89,6 +102,21 @@ jobs:
             console.log('ACCOUNT',account);
             assert(account.dialog,'Account dialog did not open');
             assert(account.link?.startsWith('https://www.maisonsurga.com/'),'Account staging handoff missing');
+
+            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v6',{waitUntil:'networkidle2',timeout:60000});
+            await page.click('[data-dialog="search-dialog"]');
+            await page.type('#search-input','brush');
+            await page.waitForFunction(()=>document.querySelector('#search-results')?.innerText.includes('Facial Cleansing Brush'),{timeout:10000});
+            console.log('SEARCH_OK',await page.evaluate(()=>document.querySelector('#search-results')?.innerText));
+            await page.evaluate(()=>document.querySelector('#search-dialog')?.close());
+
+            for(const category of ['skin','hair','tools']){
+              await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category='+category,{waitUntil:'networkidle2',timeout:60000});
+              const navState=await page.evaluate(()=>({title:document.title,h1:document.querySelector('#collection-content h1')?.textContent,url:location.href}));
+              console.log('CATEGORY_'+category.toUpperCase(),navState);
+              assert(navState.url.startsWith('https://surgaj.github.io/Maison-Surga/collection.html'),'Category left the new storefront');
+              assert(navState.h1,'Category page did not render');
+            }
 
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
