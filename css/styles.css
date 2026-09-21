@@ -58,3 +58,33 @@
 .bag-quantity>span{min-width:18px;text-align:center;font-size:10px}
 .bag-quantity .bag-remove{margin-left:5px;padding:4px 0;border-bottom:1px solid #b79a8d;font-size:9px;color:var(--muted)}
 .bag-quantity button:disabled{opacity:.45;cursor:wait}
+
+.catalog-section{max-width:1180px;margin:0 auto;padding:10px 34px 80px}
+.catalog-status{font-size:10px;letter-spacing:.08em;color:var(--muted);margin:8px 0 20px;text-align:right}
+.product-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.product-card{display:block;background:#fffaf5;border:1px solid #eaded5;border-radius:8px;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.product-card:hover{transform:translateY(-3px);box-shadow:0 14px 35px #412c2112}
+.product-card-image{aspect-ratio:1/1;overflow:hidden;background:#efe4dc}
+.product-card-image img{width:100%;height:100%;object-fit:cover;transition:transform .45s}
+.product-card:hover .product-card-image img{transform:scale(1.025)}
+.product-card-placeholder{width:100%;height:100%;background:linear-gradient(135deg,#efe4dc,#f7efe8)}
+.product-card-copy{padding:15px 15px 17px}
+.product-card-category{font-size:8px;letter-spacing:.15em;color:#9b7466;text-transform:uppercase}
+.product-card h2{font:24px/1.05 var(--serif);margin:8px 0 16px;min-height:51px}
+.product-card-copy>div{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:10px}
+.product-card-copy strong{font-weight:500}
+.product-card-copy b{font-size:16px;font-weight:400;margin-left:5px}
+.product-gallery-loading{min-height:520px;width:100%;display:grid;place-items:center;color:var(--muted);font-size:11px}
+.variant-group{width:100%;padding:8px 0}
+.variant-group>span{display:block;font-size:10px;color:var(--muted);margin-bottom:8px}
+.variant-group>div{display:flex;flex-wrap:wrap;gap:8px}
+.account-form{display:grid;gap:13px}
+.account-form>p{margin:0 0 2px}
+.account-form label{font-size:10px;font-weight:600;display:grid;gap:6px}
+.account-form input{font-size:13px}
+.account-form .button{width:100%;margin-top:4px}
+.account-form-error{background:#f7e8e4;color:#7c4037;border-radius:4px;padding:10px 12px;margin:0!important;font-size:10px!important}
+.account-secondary{display:flex;justify-content:center;align-items:center;gap:8px;font-size:10px;margin-top:4px}
+.account-secondary a{text-decoration:underline;text-underline-offset:3px}
+@media(max-width:980px){.product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-section{padding-left:22px;padding-right:22px}}
+@media(max-width:560px){.product-grid{gap:10px}.catalog-section{padding:4px 12px 55px}.catalog-status{text-align:left;margin-left:4px}.product-card-copy{padding:11px 11px 13px}.product-card h2{font-size:20px;min-height:42px;margin-bottom:12px}.product-card-copy>div{font-size:9px}.product-gallery-loading{min-height:340px}}
