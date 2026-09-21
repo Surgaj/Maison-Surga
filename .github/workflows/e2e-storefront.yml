@@ -1,0 +1,74 @@
+name: E2E Maison Surga Storefront
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install browser test dependency
+        run: npm install puppeteer-core@24
+      - name: Test product cart checkout and account
+        run: |
+          node <<'NODE'
+          const puppeteer = require('puppeteer-core');
+          (async()=>{
+            const browser=await puppeteer.launch({
+              executablePath:'/usr/bin/google-chrome',
+              headless:true,
+              args:['--no-sandbox','--disable-setuid-sandbox','--disable-gpu']
+            });
+            const page=await browser.newPage();
+            const logs=[];
+            page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
+            page.on('pageerror',e=>logs.push('pageerror: '+e.message));
+            page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
+            page.on('response',async r=>{
+              const u=r.url();
+              if(u.includes('wixapis.com') && (u.includes('/carts')||u.includes('/oauth2/')||u.includes('redirect'))) {
+                let body='';
+                try { body=(await r.text()).slice(0,900); } catch {}
+                logs.push('response '+r.status()+' '+u+' '+body);
+              }
+            });
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=1',{waitUntil:'networkidle2',timeout:60000});
+            await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
+            console.log('INITIAL',await page.evaluate(()=>({
+              price:document.querySelector('#product-price')?.textContent,
+              colors:[...document.querySelectorAll('.variant-choice')].map(x=>({name:x.textContent,pressed:x.getAttribute('aria-pressed')})),
+              button:{text:document.querySelector('#add-to-bag')?.textContent,disabled:document.querySelector('#add-to-bag')?.disabled},
+              bag:document.querySelector('.bag-count')?.textContent
+            })));
+            const pink=await page.$x("//button[contains(@class,'variant-choice') and normalize-space()='Pink']");
+            if(pink[0]) await pink[0].click();
+            await page.click('#add-to-bag');
+            await new Promise(r=>setTimeout(r,5000));
+            console.log('AFTER_ADD',await page.evaluate(()=>({
+              notice:document.querySelector('#store-notice')?.textContent,
+              dialogOpen:document.querySelector('#bag-dialog')?.open,
+              bag:document.querySelector('.bag-count')?.textContent,
+              content:document.querySelector('#bag-content')?.innerText,
+              localStorage:Object.fromEntries(Object.entries(localStorage))
+            })));
+            const checkout=await page.$('.bag-checkout');
+            if(checkout){
+              let nav='';
+              page.once('framenavigated',f=>{if(f===page.mainFrame()) nav=f.url();});
+              await checkout.click();
+              await new Promise(r=>setTimeout(r,5000));
+              console.log('CHECKOUT_NAV',nav||page.url());
+            } else console.log('CHECKOUT_NAV','NO_CHECKOUT_BUTTON');
+
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=2',{waitUntil:'networkidle2',timeout:60000});
+            await page.click('.account-button');
+            await new Promise(r=>setTimeout(r,2000));
+            console.log('ACCOUNT_OPEN',await page.evaluate(()=>document.querySelector('#account-content')?.innerText));
+            const login=await page.$('.account-login');
+            if(login){
+              await login.click();
+              await new Promise(r=>setTimeout(r,5000));
+              console.log('ACCOUNT_AFTER_LOGIN_CLICK',{url:page.url(),notice:await page.evaluate(()=>document.querySelector('#store-notice')?.textContent)});
+            }
+            console.log('LOGS\n'+logs.join('\n'));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
