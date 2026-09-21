@@ -3,17 +3,23 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - '.github/workflows/e2e-storefront.yml'
+      - "js/**"
+      - "css/**"
+      - "*.html"
+      - ".github/workflows/e2e-storefront.yml"
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Wait for Pages deployment
+        run: sleep 35
       - name: Install browser test dependency
         run: npm install puppeteer-core@24
-      - name: Test product cart checkout and account
+      - name: Test live product cart quantity checkout and account handoff
         run: |
           node <<'NODE'
           const puppeteer = require('puppeteer-core');
+          const assert = (ok,msg)=>{ if(!ok) throw new Error(msg); };
           (async()=>{
             const browser=await puppeteer.launch({
               executablePath:'/usr/bin/google-chrome',
@@ -21,59 +27,70 @@ jobs:
               args:['--no-sandbox','--disable-setuid-sandbox','--disable-gpu']
             });
             const page=await browser.newPage();
+            await page.setViewport({width:390,height:844,deviceScaleFactor:1});
             const logs=[];
             page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
             page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
-            page.on('response',async r=>{
-              const u=r.url();
-              if(u.includes('wixapis.com') && (u.includes('/carts')||u.includes('/oauth2/')||u.includes('redirect'))) {
-                let body='';
-                try { body=(await r.text()).slice(0,900); } catch {}
-                logs.push('response '+r.status()+' '+u+' '+body);
-              }
-            });
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=1',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v6',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
-            console.log('INITIAL',await page.evaluate(()=>({
+            const initial=await page.evaluate(()=>({
               price:document.querySelector('#product-price')?.textContent,
-              colors:[...document.querySelectorAll('.variant-choice')].map(x=>({name:x.textContent,pressed:x.getAttribute('aria-pressed')})),
-              button:{text:document.querySelector('#add-to-bag')?.textContent,disabled:document.querySelector('#add-to-bag')?.disabled},
-              bag:document.querySelector('.bag-count')?.textContent
-            })));
-            await page.evaluate(()=>{
-              const pink=[...document.querySelectorAll('.variant-choice')].find(x=>x.textContent.trim()==='Pink');
-              pink?.click();
-            });
-            await page.click('#add-to-bag');
-            await new Promise(r=>setTimeout(r,5000));
-            console.log('AFTER_ADD',await page.evaluate(()=>({
-              notice:document.querySelector('#store-notice')?.textContent,
-              dialogOpen:document.querySelector('#bag-dialog')?.open,
-              bag:document.querySelector('.bag-count')?.textContent,
-              content:document.querySelector('#bag-content')?.innerText,
-              localStorage:Object.fromEntries(Object.entries(localStorage))
-            })));
-            const checkout=await page.$('.bag-checkout');
-            if(checkout){
-              let nav='';
-              page.once('framenavigated',f=>{if(f===page.mainFrame()) nav=f.url();});
-              await checkout.click();
-              await new Promise(r=>setTimeout(r,5000));
-              console.log('CHECKOUT_NAV',nav||page.url());
-            } else console.log('CHECKOUT_NAV','NO_CHECKOUT_BUTTON');
+              pink:[...document.querySelectorAll('.variant-choice')].some(x=>x.textContent.trim()==='Pink'),
+              enabled:!document.querySelector('#add-to-bag')?.disabled
+            }));
+            console.log('INITIAL',initial);
+            assert(initial.price==='£14.99','Live Wix price did not load');
+            assert(initial.pink && initial.enabled,'Live Wix variant controls did not load');
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=2',{waitUntil:'networkidle2',timeout:60000});
-            await page.click('.account-button');
-            await new Promise(r=>setTimeout(r,2000));
-            console.log('ACCOUNT_OPEN',await page.evaluate(()=>document.querySelector('#account-content')?.innerText));
-            const login=await page.$('.account-login');
-            if(login){
-              await login.click();
-              await new Promise(r=>setTimeout(r,5000));
-              console.log('ACCOUNT_AFTER_LOGIN_CLICK',{url:page.url(),notice:await page.evaluate(()=>document.querySelector('#store-notice')?.textContent)});
-            }
-            console.log('LOGS\n'+logs.join('\n'));
+            await page.evaluate(()=>[...document.querySelectorAll('.variant-choice')].find(x=>x.textContent.trim()==='Pink')?.click());
+            await page.click('#add-to-bag');
+            await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(1)',{timeout:20000});
+            const afterAdd=await page.evaluate(()=>({
+              bag:document.querySelector('.bag-count')?.textContent,
+              dialog:document.querySelector('#bag-dialog')?.open,
+              content:document.querySelector('#bag-content')?.innerText,
+              checkout:!!document.querySelector('.bag-checkout')
+            }));
+            console.log('AFTER_ADD',afterAdd);
+            assert(afterAdd.dialog && afterAdd.checkout,'Bag did not render after Add to bag');
+            assert(afterAdd.content.includes('Pink'),'Selected variant missing from bag');
+
+            await page.click('[data-cart-action="increase"]');
+            await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(2)',{timeout:20000});
+            console.log('AFTER_QTY',await page.evaluate(()=>({
+              bag:document.querySelector('.bag-count')?.textContent,
+              content:document.querySelector('#bag-content')?.innerText
+            })));
+
+            const checkoutHref = await page.evaluate(async()=>{
+              const cart = await window.MaisonWix.getCurrentCart();
+              return window.MaisonWix.getCheckoutUrl(cart.id);
+            });
+            console.log('CHECKOUT_URL',checkoutHref);
+            assert(/^https:\/\//.test(checkoutHref||''),'Wix checkout URL was not returned');
+
+            await page.evaluate(()=>document.querySelector('#bag-dialog')?.close());
+            await page.click('.hamburger');
+            const accountMobile=await page.evaluate(()=>({
+              menuOpen:document.querySelector('#primary-navigation')?.classList.contains('open'),
+              accountVisible:getComputedStyle(document.querySelector('.mobile-nav-account')).display
+            }));
+            console.log('MOBILE_NAV',accountMobile);
+            assert(accountMobile.menuOpen && accountMobile.accountVisible!=='none','Mobile account navigation failed');
+
+            await page.evaluate(()=>document.querySelector('.mobile-nav-account')?.click());
+            await new Promise(r=>setTimeout(r,3500));
+            const account=await page.evaluate(()=>({
+              dialog:document.querySelector('#account-dialog')?.open,
+              content:document.querySelector('#account-content')?.innerText,
+              link:document.querySelector('#account-content a')?.href
+            }));
+            console.log('ACCOUNT',account);
+            assert(account.dialog,'Account dialog did not open');
+            assert(account.link?.startsWith('https://www.maisonsurga.com/'),'Account staging handoff missing');
+
+            console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
