@@ -5,6 +5,33 @@
   const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
   const CART_KEY = 'maisonSurgaWixCartV1';
   const API_ROOT = 'https://www.wixapis.com';
+  const DEFAULT_PRODUCT_ID = 'b3264b49-f087-482a-bb94-1bd1f104249e';
+  const CATEGORY_CONFIG = {
+    skincare: {
+      id: '0d5da727-207f-44bc-951a-456e3e08957c',
+      title: 'Skincare',
+      eyebrow: 'THE SKINCARE EDIT',
+      description: 'Everyday rituals for cleansing, massage and mindful skin care.'
+    },
+    tools: {
+      id: 'c1aa6676-1ee4-46c9-82e7-8c2d8f8a017a',
+      title: 'Beauty Tools',
+      eyebrow: 'THE BEAUTY TOOLS EDIT',
+      description: 'Practical tools chosen to make everyday beauty feel a little more intentional.'
+    },
+    makeup: {
+      id: 'dbc8b26a-73ab-47cb-946b-f22f15ad1085',
+      title: 'Makeup',
+      eyebrow: 'THE MAKEUP EDIT',
+      description: 'A focused edit of colour, texture and easy everyday beauty.'
+    },
+    selfcare: {
+      id: '021c7d81-2427-4a8f-8da7-79042bcca0b8',
+      title: 'Self-Care',
+      eyebrow: 'THE SELF-CARE EDIT',
+      description: 'Small comforts and slower rituals for moments that are just yours.'
+    }
+  };
 
   const parseJson = async response => {
     const text = await response.text();
@@ -184,6 +211,96 @@
     return data.variants || [];
   };
 
+  const queryProducts = async () => {
+    const data = await api('/stores/v3/products/query', {
+      method: 'POST',
+      body: JSON.stringify({
+        fields: ['CURRENCY', 'DIRECT_CATEGORIES_INFO', 'URL'],
+        query: { cursorPaging: { limit: 100 } }
+      })
+    });
+    return data.products || [];
+  };
+
+  const getProduct = async productId => {
+    const fields = new URLSearchParams();
+    ['CURRENCY', 'MEDIA_ITEMS_INFO', 'PLAIN_DESCRIPTION', 'URL', 'DIRECT_CATEGORIES_INFO'].forEach(field => fields.append('fields', field));
+    const data = await api(`/stores/v3/products/${encodeURIComponent(productId)}?${fields.toString()}`);
+    return data.product || null;
+  };
+
+  const productImage = product =>
+    product?.media?.main?.image?.url ||
+    product?.media?.main?.thumbnail?.url ||
+    product?.media?.itemsInfo?.items?.find(item => item?.image?.url)?.image?.url ||
+    '';
+
+  const stripHtml = value => {
+    if (!value) return '';
+    const doc = new DOMParser().parseFromString(value, 'text/html');
+    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  };
+
+  const variantPrice = variant => variant?.price?.actualPrice || null;
+
+  const lowestVariant = variants => {
+    const sellable = variants.filter(v => v.visible !== false && v.inventoryStatus?.inStock !== false);
+    return sellable.sort((a,b) => Number(variantPrice(a)?.amount || Infinity) - Number(variantPrice(b)?.amount || Infinity))[0] || variants[0] || null;
+  };
+
+  const categoryKeyFromUrl = () => {
+    const raw = (new URLSearchParams(location.search).get('category') || 'skincare').toLowerCase();
+    const aliases = { skin: 'skincare', skincare: 'skincare', tools: 'tools', 'beauty-tools': 'tools', makeup: 'makeup', selfcare: 'selfcare', 'self-care': 'selfcare' };
+    return aliases[raw] || 'skincare';
+  };
+
+  const initCollectionPage = async () => {
+    const root = document.getElementById('collection-content');
+    if (!root) return;
+
+    const key = categoryKeyFromUrl();
+    const config = CATEGORY_CONFIG[key];
+    document.title = `${config.title} — Maison Surga`;
+    root.innerHTML = `<section class="collection-intro"><p class="eyebrow">${config.eyebrow}</p><h1>${config.title}</h1><p>${config.description}</p></section><section class="catalog-section"><div class="catalog-status">Loading the live Maison Surga catalogue…</div><div class="product-grid" id="product-grid"></div></section>`;
+
+    try {
+      const products = (await queryProducts()).filter(product =>
+        product.visible !== false &&
+        (product.directCategoriesInfo?.categories || []).some(category => category.id === config.id)
+      );
+
+      const cards = await Promise.all(products.map(async product => {
+        const variants = await queryVariants(product.id);
+        const variant = lowestVariant(variants);
+        return {
+          product,
+          price: money(variantPrice(variant))
+        };
+      }));
+
+      const grid = document.getElementById('product-grid');
+      const status = root.querySelector('.catalog-status');
+
+      if (!cards.length) {
+        status.textContent = 'This edit is being prepared.';
+        return;
+      }
+
+      status.textContent = `${cards.length} products in this edit`;
+      grid.innerHTML = cards.map(({product,price}) => `<a class="product-card" href="product.html?id=${encodeURIComponent(product.id)}">
+        <div class="product-card-image">${productImage(product) ? `<img src="${productImage(product)}" alt="${product.name}" loading="lazy">` : '<div class="product-card-placeholder"></div>'}</div>
+        <div class="product-card-copy">
+          <span class="product-card-category">${config.title}</span>
+          <h2>${product.name}</h2>
+          <div><strong>${price || 'View product'}</strong><span>View <b>⟶</b></span></div>
+        </div>
+      </a>`).join('');
+    } catch (error) {
+      console.error('[Maison Surga] collection error', error);
+      root.querySelector('.catalog-status').textContent = 'We could not load this edit right now. Please try again.';
+    }
+  };
+
   const getMyMember = async () => {
     try {
       const data = await api('/members/v1/members/my');
@@ -194,7 +311,7 @@
     }
   };
 
-  const startLogin = async () => {
+  const authorizeMemberSession = async sessionToken => {
     const redirectUri = new URL('auth-callback.html', location.href).href;
     const verifier = randomBase64Url(48);
     const challenge = await sha256Base64Url(verifier);
@@ -215,16 +332,45 @@
             responseMode: 'fragment',
             responseType: 'code',
             scope: 'offline_access',
-            state
-          },
-          prompt: 'login'
+            state,
+            sessionToken
+          }
         }
       })
     });
 
     const url = data?.redirectSession?.fullUrl;
-    if (!url) throw new Error('Wix login URL was not returned.');
+    if (!url) throw new Error('Wix authorization URL was not returned.');
     location.href = url;
+  };
+
+  const loginMember = async (email, password) => {
+    const data = await api('/_api/iam/authentication/v2/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        loginId: { email },
+        password
+      })
+    });
+
+    if (data.state === 'SUCCESS' && data.sessionToken) {
+      await authorizeMemberSession(data.sessionToken);
+      return;
+    }
+
+    if (data.state === 'REQUIRE_OWNER_APPROVAL') {
+      throw new Error('This account is waiting for approval.');
+    }
+
+    if (data.state === 'REQUIRE_EMAIL_VERIFICATION') {
+      throw new Error('Please verify your email before signing in.');
+    }
+
+    throw new Error(data.message || 'We could not sign you in with those details.');
+  };
+
+  const startLogin = () => {
+    document.getElementById('account-email')?.focus();
   };
 
   const completeLoginFromCallback = async () => {
@@ -435,9 +581,60 @@
   const renderAccount = async () => {
     const panel = document.getElementById('account-content');
     if (!panel) return;
-    panel.innerHTML = `<p>Your existing Maison Surga account remains securely hosted by Wix while this new storefront is in staging.</p>
-      <a class="button dark" href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Open current member area <span>⟶</span></a>
-      <small class="account-note">Cart and checkout are connected to the existing store. Native member sign-in will replace this handoff only after Wix Headless authentication passes our tests.</small>`;
+    panel.innerHTML = '<div class="bag-loading">Checking your account…</div>';
+
+    try {
+      const member = await getMyMember();
+      if (member) {
+        const displayName = member.profile?.nickname || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
+        panel.innerHTML = `<div class="account-signed-in">
+          <span class="account-status">SIGNED IN</span>
+          <h3>Welcome, ${displayName}.</h3>
+          ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
+          <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
+        </div>`;
+        panel.querySelector('.account-logout')?.addEventListener('click', logout);
+        return;
+      }
+
+      panel.innerHTML = `<form class="account-form" id="account-login-form">
+        <p>Sign in to your Maison Surga account.</p>
+        <label>Email<input id="account-email" name="email" type="email" autocomplete="email" required></label>
+        <label>Password<input id="account-password" name="password" type="password" autocomplete="current-password" required minlength="6"></label>
+        <p class="account-form-error" id="account-form-error" role="alert" hidden></p>
+        <button class="button dark account-login" type="submit">Sign in securely <span>⟶</span></button>
+        <div class="account-secondary">
+          <a href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Create an account</a>
+          <span>·</span>
+          <a href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Forgot password?</a>
+        </div>
+        <small class="account-note">Your account is authenticated by Wix. Maison Surga does not store your password in this storefront.</small>
+      </form>`;
+
+      panel.querySelector('#account-login-form')?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const errorEl = form.querySelector('#account-form-error');
+        const button = form.querySelector('.account-login');
+        const email = form.email.value.trim();
+        const password = form.password.value;
+        errorEl.hidden = true;
+        button.disabled = true;
+        button.innerHTML = 'Signing in…';
+        try {
+          await loginMember(email, password);
+        } catch (error) {
+          console.error('[Maison Surga] member login error', error);
+          errorEl.textContent = error.message || 'We could not sign you in.';
+          errorEl.hidden = false;
+          button.disabled = false;
+          button.innerHTML = 'Sign in securely <span>⟶</span>';
+        }
+      });
+    } catch (error) {
+      panel.innerHTML = '<p>We could not load your account right now.</p>';
+      console.error('[Maison Surga] account error', error);
+    }
   };
 
   const showNotice = (message, type = 'success') => {
@@ -457,59 +654,101 @@
   };
 
   const initProductPage = async () => {
-    const root = document.querySelector('[data-wix-product-id]');
+    const root = document.querySelector('[data-product-root]');
     if (!root) return;
 
-    const productId = root.dataset.wixProductId;
+    const productId = new URLSearchParams(location.search).get('id') || DEFAULT_PRODUCT_ID;
     const selector = document.getElementById('variant-options');
     const price = document.getElementById('product-price');
     const compare = document.getElementById('product-compare-price');
     const mobilePrice = document.getElementById('mobile-product-price');
     const button = document.getElementById('add-to-bag');
+    const title = document.getElementById('product-title');
+    const description = document.getElementById('product-description');
+    const gallery = document.getElementById('live-gallery');
+    const thumbs = document.getElementById('live-gallery-thumbs');
+    const optionLabel = document.getElementById('product-options-label');
     if (!selector || !button) return;
 
     button.disabled = true;
     button.textContent = 'Loading…';
 
     try {
-      const variants = (await queryVariants(productId)).filter(v => v.visible !== false && v.inventoryStatus?.inStock !== false);
+      const [product, allVariants] = await Promise.all([getProduct(productId), queryVariants(productId)]);
+      if (!product) throw new Error('Product not found.');
+      const variants = allVariants.filter(v => v.visible !== false && v.inventoryStatus?.inStock !== false);
       if (!variants.length) throw new Error('This product is not available.');
 
-      const colors = variants.map(variant => {
-        const color = (variant.optionChoices || []).find(choice => choice.optionChoiceNames?.optionName === 'Color');
-        return {
-          variant,
-          color: color?.optionChoiceNames?.choiceName || 'Default'
-        };
+      document.title = `${product.name} — Maison Surga`;
+      if (title) title.textContent = product.name;
+      if (description) {
+        const clean = stripHtml(product.plainDescription);
+        description.textContent = clean ? clean.slice(0, 420) : 'A curated Maison Surga find for an everyday beauty ritual.';
+      }
+
+      const mediaItems = product.media?.itemsInfo?.items || [];
+      const images = mediaItems.map(item => item?.image?.url).filter(Boolean);
+      const fallback = productImage(product);
+      if (!images.length && fallback) images.push(fallback);
+      if (gallery && images.length) {
+        gallery.innerHTML = images.slice(0,6).map((url,index) => `<img src="${url}" alt="${product.name}${index ? ' view '+(index+1) : ''}" ${index ? 'loading="lazy"' : ''}>`).join('');
+        if (thumbs) thumbs.innerHTML = images.slice(0,6).map((url,index) => `<button type="button" aria-label="View image ${index+1}" aria-current="${index===0}"><img src="${url}" alt=""></button>`).join('');
+        const thumbButtons=[...thumbs.querySelectorAll('button')];
+        thumbButtons.forEach((b,i)=>b.addEventListener('click',()=>gallery.scrollTo({left:gallery.clientWidth*i,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})));
+        gallery.addEventListener('scroll',()=>{const selected=Math.round(gallery.scrollLeft/gallery.clientWidth);thumbButtons.forEach((b,i)=>b.setAttribute('aria-current',String(i===selected)));},{passive:true});
+      }
+
+      const optionNames = [...new Set(variants.flatMap(v => (v.optionChoices || []).map(choice => choice.optionChoiceNames?.optionName)).filter(name => name && !/ships? from/i.test(name)))];
+      const selections = {};
+      const valuesByOption = {};
+      optionNames.forEach(name => {
+        valuesByOption[name] = [...new Set(variants.flatMap(v => (v.optionChoices || [])
+          .filter(choice => choice.optionChoiceNames?.optionName === name)
+          .map(choice => choice.optionChoiceNames?.choiceName)
+          .filter(Boolean)))];
+        selections[name] = name.toLowerCase() === 'color' && valuesByOption[name].some(v => v.toLowerCase()==='pink')
+          ? valuesByOption[name].find(v => v.toLowerCase()==='pink')
+          : valuesByOption[name][0];
       });
 
-      selector.innerHTML = colors.map(({ variant, color }) => `<button type="button" class="variant-choice" data-variant-id="${variant.variantId}" aria-pressed="false">${color}</button>`).join('');
+      const matchesSelections = variant => optionNames.every(name =>
+        (variant.optionChoices || []).some(choice =>
+          choice.optionChoiceNames?.optionName === name &&
+          choice.optionChoiceNames?.choiceName === selections[name]
+        )
+      );
 
-      let selected = colors.find(item => item.color.toLowerCase() === 'pink') || colors[0];
+      let selected = variants.find(matchesSelections) || lowestVariant(variants);
 
-      const selectVariant = next => {
-        selected = next;
-        selector.querySelectorAll('.variant-choice').forEach(choice => {
-          choice.setAttribute('aria-pressed', String(choice.dataset.variantId === selected.variant.variantId));
-        });
-        const currentPrice = money(selected.variant.price?.actualPrice);
-        if (price) price.textContent = currentPrice;
-        if (mobilePrice) mobilePrice.textContent = currentPrice;
+      const updateSelected = () => {
+        selected = variants.find(matchesSelections) || lowestVariant(variants);
+        const currentPrice = money(selected?.price?.actualPrice);
+        if (price) price.textContent = currentPrice || 'View at checkout';
+        if (mobilePrice) mobilePrice.textContent = currentPrice || '';
         if (compare) {
-          const compareText = money(selected.variant.price?.compareAtPrice);
-          compare.textContent = compareText;
-          compare.hidden = !compareText;
+          compare.textContent = '';
+          compare.hidden = true;
         }
+        selector.querySelectorAll('[data-option-name][data-option-value]').forEach(choice => {
+          choice.setAttribute('aria-pressed', String(selections[choice.dataset.optionName] === choice.dataset.optionValue));
+        });
       };
 
-      selector.querySelectorAll('.variant-choice').forEach(choice => {
-        choice.addEventListener('click', () => {
-          const next = colors.find(item => item.variant.variantId === choice.dataset.variantId);
-          if (next) selectVariant(next);
+      if (!optionNames.length) {
+        optionLabel.textContent = 'Available now';
+        selector.innerHTML = '<span class="muted-note">Ready to add to your bag.</span>';
+      } else {
+        optionLabel.textContent = 'Choose your option';
+        selector.innerHTML = optionNames.map(name => `<div class="variant-group"><span>${name}</span><div>${valuesByOption[name].map(value => `<button type="button" class="variant-choice" data-option-name="${name}" data-option-value="${value}" aria-pressed="false">${value}</button>`).join('')}</div></div>`).join('');
+        selector.querySelectorAll('.variant-choice').forEach(choice => {
+          choice.addEventListener('click', () => {
+            selections[choice.dataset.optionName] = choice.dataset.optionValue;
+            updateSelected();
+          });
         });
-      });
+      }
 
-      selectVariant(selected);
+      updateSelected();
       button.disabled = false;
       button.textContent = 'Add to bag';
 
@@ -518,11 +757,7 @@
         button.disabled = true;
         button.textContent = 'Adding…';
         try {
-          const cart = await addToCart({
-            productId,
-            variantId: selected.variant.variantId,
-            quantity: 1
-          });
+          const cart = await addToCart({ productId, variantId: selected?.variantId, quantity: 1 });
           const countEl = document.querySelector('.bag-count');
           if (countEl) countEl.textContent = `(${lineItemCount(cart)})`;
           showNotice('Added to your beauty bag.');
@@ -541,7 +776,7 @@
     } catch (error) {
       button.disabled = true;
       button.textContent = 'Unavailable';
-      selector.innerHTML = '<p class="product-error">We could not load the live product options.</p>';
+      selector.innerHTML = '<p class="product-error">We could not load this product right now.</p>';
       console.error('[Maison Surga] product error', error);
     }
   };
@@ -574,8 +809,13 @@
     addToCart,
     getCheckoutUrl,
     queryVariants,
+    queryProducts,
+    getProduct,
+    initCollectionPage,
     getMyMember,
     startLogin,
+    loginMember,
+    authorizeMemberSession,
     completeLoginFromCallback,
     logout,
     lineItemCount,
@@ -588,6 +828,7 @@
     renderAccount,
     initBag,
     initAccount,
-    initProductPage
+    initProductPage,
+    CATEGORY_CONFIG
   };
 })();
