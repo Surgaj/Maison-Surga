@@ -35,7 +35,7 @@ jobs:
             page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
             page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v6',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v9',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
             const initial=await page.evaluate(()=>({
               price:document.querySelector('#product-price')?.textContent,
@@ -58,6 +58,14 @@ jobs:
             console.log('AFTER_ADD',afterAdd);
             assert(afterAdd.dialog && afterAdd.checkout,'Bag did not render after Add to bag');
             assert(afterAdd.content.includes('Pink'),'Selected variant missing from bag');
+
+            await page.evaluate(()=>document.querySelector('#bag-dialog')?.close());
+            await page.click('[data-dialog="bag-dialog"]');
+            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Pink'),{timeout:10000});
+            console.log('REOPEN_BAG',await page.evaluate(()=>({
+              bag:document.querySelector('.bag-count')?.textContent,
+              content:document.querySelector('#bag-content')?.innerText
+            })));
 
             await page.click('[data-cart-action="increase"]');
             await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(2)',{timeout:20000});
@@ -115,7 +123,7 @@ jobs:
             assert(account.dialog,'Account dialog did not open');
             assert(account.link?.startsWith('https://www.maisonsurga.com/'),'Account staging handoff missing');
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v6',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v9',{waitUntil:'networkidle2',timeout:60000});
             await page.click('[data-dialog="search-dialog"]');
             await page.type('#search-input','brush');
             await page.waitForFunction(()=>document.querySelector('#search-results')?.innerText.includes('Facial Cleansing Brush'),{timeout:10000});
