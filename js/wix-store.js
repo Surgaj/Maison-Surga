@@ -302,6 +302,7 @@
     'Maison Surga item';
 
   const descriptionOf = item => (item?.attributes?.descriptionLines || item?.descriptionLines || [])
+    .filter(line => !/ships? from/i.test(line?.name?.original || line?.name?.translated || line?.name || ''))
     .map(line => line?.plainText?.original || line?.plainText?.translated || line?.plainText || '')
     .filter(Boolean)
     .join(' · ');
