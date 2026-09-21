@@ -155,6 +155,26 @@ jobs:
             console.log('SEARCH_OK',await page.evaluate(()=>document.querySelector('#search-results')?.innerText));
             await page.evaluate(()=>document.querySelector('#search-dialog')?.close());
 
+            await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category=skincare&e2e=favourites-v16',{waitUntil:'networkidle2',timeout:60000});
+            await page.waitForFunction(()=>document.querySelectorAll('.product-card').length>=4,{timeout:30000});
+            const firstFavId=await page.evaluate(()=>document.querySelector('.product-card')?.dataset.productId);
+            await page.click('.product-card-favourite');
+            const favSaved=await page.evaluate(id=>({
+              pressed:document.querySelector('[data-favourite-id="'+id+'"]')?.getAttribute('aria-pressed'),
+              stored:JSON.parse(localStorage.getItem('maisonSurgaFavouritesV1')||'[]').some(item=>item.id===id)
+            }),firstFavId);
+            console.log('FAVOURITE_SAVE',favSaved);
+            assert(favSaved.pressed==='true' && favSaved.stored,'Favourite did not save');
+            await page.reload({waitUntil:'networkidle2',timeout:60000});
+            await page.waitForFunction(()=>document.querySelectorAll('.product-card').length>=4,{timeout:30000});
+            const favPersisted=await page.evaluate(id=>document.querySelector('[data-favourite-id="'+id+'"]')?.getAttribute('aria-pressed'),firstFavId);
+            console.log('FAVOURITE_PERSISTENCE',favPersisted);
+            assert(favPersisted==='true','Favourite did not persist across reload');
+            await page.evaluate(id=>document.querySelector('[data-favourite-id="'+id+'"]')?.click(),firstFavId);
+            await new Promise(r=>setTimeout(r,600));
+            const favRemoved=await page.evaluate(id=>!JSON.parse(localStorage.getItem('maisonSurgaFavouritesV1')||'[]').some(item=>item.id===id),firstFavId);
+            assert(favRemoved,'Favourite did not remove');
+
             for(const category of ['skincare','tools','makeup','selfcare']){
               await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category='+category,{waitUntil:'networkidle2',timeout:60000});
               await page.waitForFunction(()=>document.querySelectorAll('.product-card').length>=4,{timeout:30000});
