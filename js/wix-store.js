@@ -860,7 +860,11 @@
   };
 
   const initAccount = () => {
-    document.querySelector('[data-dialog="account-dialog"]')?.addEventListener('click', renderAccount);
+    document.querySelectorAll('[data-dialog="account-dialog"]').forEach(trigger => {
+      trigger.addEventListener('click', renderAccount);
+    });
+    // Prepare the panel immediately so desktop and mobile never show a stale loader.
+    renderAccount();
   };
 
   window.MaisonWix = {
