@@ -7,6 +7,9 @@ on:
       - "css/**"
       - "*.html"
       - ".github/workflows/e2e-storefront.yml"
+concurrency:
+  group: maison-surga-e2e
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -59,6 +62,15 @@ jobs:
             await page.click('[data-cart-action="increase"]');
             await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(2)',{timeout:20000});
             console.log('AFTER_QTY',await page.evaluate(()=>({
+              bag:document.querySelector('.bag-count')?.textContent,
+              content:document.querySelector('#bag-content')?.innerText
+            })));
+
+            await page.reload({waitUntil:'networkidle2',timeout:60000});
+            await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(2)',{timeout:20000});
+            await page.click('[data-dialog="bag-dialog"]');
+            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Pink'),{timeout:10000});
+            console.log('PERSISTENCE',await page.evaluate(()=>({
               bag:document.querySelector('.bag-count')?.textContent,
               content:document.querySelector('#bag-content')?.innerText
             })));
@@ -125,6 +137,22 @@ jobs:
               buttons:[...document.querySelectorAll('button')].map(b=>(b.innerText||b.getAttribute('aria-label')||'').trim()).filter(x=>/account|member|login|log in|sign in/i.test(x)).slice(0,30)
             }));
             console.log('LEGACY_MEMBER_DISCOVERY',memberLinks);
+            const loginClicked=await legacy.evaluate(()=>{
+              const button=[...document.querySelectorAll('button')].find(b=>/log in|login|sign in/i.test((b.innerText||b.getAttribute('aria-label')||'').trim()));
+              if(!button) return false;
+              button.click();
+              return true;
+            });
+            if(loginClicked){
+              await new Promise(r=>setTimeout(r,3000));
+              const loginState=await legacy.evaluate(()=>({
+                url:location.href,
+                dialogs:[...document.querySelectorAll('[role="dialog"],dialog')].map(d=>(d.innerText||'').trim()).filter(Boolean).slice(0,5),
+                forms:[...document.querySelectorAll('form')].map(f=>(f.innerText||'').trim()).filter(Boolean).slice(0,5),
+                inputs:[...document.querySelectorAll('input')].map(i=>({type:i.type,name:i.name,placeholder:i.placeholder})).slice(0,20)
+              }));
+              console.log('LEGACY_LOGIN_CLICK',loginState);
+            }
             await legacy.close();
 
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
