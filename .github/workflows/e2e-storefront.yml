@@ -118,6 +118,15 @@ jobs:
               assert(navState.h1,'Category page did not render');
             }
 
+            const legacy=await browser.newPage();
+            await legacy.goto('https://www.maisonsurga.com/',{waitUntil:'networkidle2',timeout:60000});
+            const memberLinks=await legacy.evaluate(()=>({
+              anchors:[...document.querySelectorAll('a[href]')].map(a=>({text:(a.innerText||a.getAttribute('aria-label')||'').trim(),href:a.href})).filter(x=>/account|member|order|login|log in|sign in/i.test(x.text+' '+x.href)).slice(0,30),
+              buttons:[...document.querySelectorAll('button')].map(b=>(b.innerText||b.getAttribute('aria-label')||'').trim()).filter(x=>/account|member|login|log in|sign in/i.test(x)).slice(0,30)
+            }));
+            console.log('LEGACY_MEMBER_DISCOVERY',memberLinks);
+            await legacy.close();
+
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
