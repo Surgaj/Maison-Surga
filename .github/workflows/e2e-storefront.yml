@@ -1,6 +1,9 @@
 name: E2E Maison Surga Storefront
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/e2e-storefront.yml'
 jobs:
   test:
     runs-on: ubuntu-latest
