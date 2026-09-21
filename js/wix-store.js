@@ -9,24 +9,28 @@
   const CATEGORY_CONFIG = {
     skincare: {
       id: '0d5da727-207f-44bc-951a-456e3e08957c',
+      curatedIds: ["b3264b49-f087-482a-bb94-1bd1f104249e","f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","9a468a63-1661-4e28-a818-47d6959d1c3d"],
       title: 'Skincare',
       eyebrow: 'THE SKINCARE EDIT',
       description: 'Everyday rituals for cleansing, massage and mindful skin care.'
     },
     tools: {
       id: 'c1aa6676-1ee4-46c9-82e7-8c2d8f8a017a',
+      curatedIds: ["f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","e8680269-c15a-4fe1-8bf5-d26a707d5727","7a74e237-aafd-425a-bd71-0b0fbe7cd9d8"],
       title: 'Beauty Tools',
       eyebrow: 'THE BEAUTY TOOLS EDIT',
       description: 'Practical tools chosen to make everyday beauty feel a little more intentional.'
     },
     makeup: {
       id: 'dbc8b26a-73ab-47cb-946b-f22f15ad1085',
+      curatedIds: ["02cfe8d1-4600-4b43-8561-8c9c7e506bc8","8bdb4295-79ef-4f3e-a0c9-cb41cd3543e4","7f493ad7-8919-4d0e-a0ad-f073dcefa575","c7ea6e66-7c67-40bf-9023-45ab80ad08eb"],
       title: 'Makeup',
       eyebrow: 'THE MAKEUP EDIT',
       description: 'A focused edit of colour, texture and easy everyday beauty.'
     },
     selfcare: {
       id: '021c7d81-2427-4a8f-8da7-79042bcca0b8',
+      curatedIds: ["0fdfba60-9cd9-4c7f-baba-6a570234a95f","b3264b49-f087-482a-bb94-1bd1f104249e","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","9a468a63-1661-4e28-a818-47d6959d1c3d"],
       title: 'Self-Care',
       eyebrow: 'THE SELF-CARE EDIT',
       description: 'Small comforts and slower rituals for moments that are just yours.'
@@ -266,6 +270,7 @@
     try {
       const products = (await queryProducts()).filter(product =>
         product.visible !== false &&
+        config.curatedIds.includes(product.id) &&
         (product.directCategoriesInfo?.categories || []).some(category => category.id === config.id)
       );
 
@@ -367,6 +372,44 @@
     }
 
     throw new Error(data.message || 'We could not sign you in with those details.');
+  };
+
+  const registerMember = async ({ email, password, firstName, lastName }) => {
+    const data = await api('/_api/iam/authentication/v2/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        loginId: { email },
+        password,
+        profile: { firstName, lastName, nickname: firstName || email.split('@')[0] }
+      })
+    });
+
+    if (data.state === 'SUCCESS' && data.sessionToken) {
+      await authorizeMemberSession(data.sessionToken);
+      return { success: true };
+    }
+
+    if (data.state === 'REQUIRE_EMAIL_VERIFICATION' && data.stateToken) {
+      return { verificationRequired: true, stateToken: data.stateToken };
+    }
+
+    if (data.state === 'REQUIRE_OWNER_APPROVAL') {
+      throw new Error('Your account was created and is waiting for approval.');
+    }
+
+    throw new Error(data.message || 'We could not create your account.');
+  };
+
+  const verifyMemberRegistration = async ({ code, stateToken }) => {
+    const data = await api('/_api/iam/verification/v1/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code, stateToken })
+    });
+    if (data.state === 'SUCCESS' && data.sessionToken) {
+      await authorizeMemberSession(data.sessionToken);
+      return;
+    }
+    throw new Error(data.message || 'That verification code could not be confirmed.');
   };
 
   const startLogin = () => {
@@ -597,38 +640,111 @@
         return;
       }
 
-      panel.innerHTML = `<form class="account-form" id="account-login-form">
-        <p>Sign in to your Maison Surga account.</p>
+      panel.innerHTML = `<div class="account-switch" role="tablist" aria-label="Account">
+        <button type="button" data-account-mode="login" aria-pressed="true">Sign in</button>
+        <button type="button" data-account-mode="register" aria-pressed="false">Create account</button>
+      </div>
+      <form class="account-form" id="account-login-form">
+        <p>Welcome back to Maison Surga.</p>
         <label>Email<input id="account-email" name="email" type="email" autocomplete="email" required></label>
         <label>Password<input id="account-password" name="password" type="password" autocomplete="current-password" required minlength="6"></label>
-        <p class="account-form-error" id="account-form-error" role="alert" hidden></p>
+        <p class="account-form-error" id="account-login-error" role="alert" hidden></p>
         <button class="button dark account-login" type="submit">Sign in securely <span>⟶</span></button>
-        <div class="account-secondary">
-          <a href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Create an account</a>
-          <span>·</span>
-          <a href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Forgot password?</a>
-        </div>
-        <small class="account-note">Your account is authenticated by Wix. Maison Surga does not store your password in this storefront.</small>
-      </form>`;
+      </form>
+      <form class="account-form" id="account-register-form" hidden>
+        <p>Create your Maison Surga account.</p>
+        <div class="account-name-row"><label>First name<input name="firstName" type="text" autocomplete="given-name" required></label><label>Last name<input name="lastName" type="text" autocomplete="family-name" required></label></div>
+        <label>Email<input name="email" type="email" autocomplete="email" required></label>
+        <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+        <p class="account-form-error" id="account-register-error" role="alert" hidden></p>
+        <button class="button dark account-register" type="submit">Create account <span>⟶</span></button>
+      </form>
+      <form class="account-form account-verify-form" id="account-verify-form" hidden>
+        <p>We sent a verification code to your email.</p>
+        <label>Verification code<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+        <p class="account-form-error" id="account-verify-error" role="alert" hidden></p>
+        <button class="button dark" type="submit">Verify email <span>⟶</span></button>
+      </form>
+      <small class="account-note">Authentication is handled by Wix. Maison Surga does not store your password in this storefront.</small>`;
 
-      panel.querySelector('#account-login-form')?.addEventListener('submit', async event => {
+      let verificationStateToken = null;
+      const loginForm = panel.querySelector('#account-login-form');
+      const registerForm = panel.querySelector('#account-register-form');
+      const verifyForm = panel.querySelector('#account-verify-form');
+      const switches = [...panel.querySelectorAll('[data-account-mode]')];
+
+      switches.forEach(control => control.addEventListener('click', () => {
+        const mode = control.dataset.accountMode;
+        switches.forEach(item => item.setAttribute('aria-pressed', String(item === control)));
+        loginForm.hidden = mode !== 'login';
+        registerForm.hidden = mode !== 'register';
+        verifyForm.hidden = true;
+      }));
+
+      loginForm?.addEventListener('submit', async event => {
         event.preventDefault();
         const form = event.currentTarget;
-        const errorEl = form.querySelector('#account-form-error');
+        const errorEl = form.querySelector('#account-login-error');
         const button = form.querySelector('.account-login');
-        const email = form.email.value.trim();
-        const password = form.password.value;
         errorEl.hidden = true;
         button.disabled = true;
         button.innerHTML = 'Signing in…';
         try {
-          await loginMember(email, password);
+          await loginMember(form.email.value.trim(), form.password.value);
         } catch (error) {
           console.error('[Maison Surga] member login error', error);
-          errorEl.textContent = error.message || 'We could not sign you in.';
+          errorEl.textContent = 'We could not sign you in. Check your email and password and try again.';
           errorEl.hidden = false;
           button.disabled = false;
           button.innerHTML = 'Sign in securely <span>⟶</span>';
+        }
+      });
+
+      registerForm?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const errorEl = form.querySelector('#account-register-error');
+        const button = form.querySelector('.account-register');
+        errorEl.hidden = true;
+        button.disabled = true;
+        button.innerHTML = 'Creating account…';
+        try {
+          const result = await registerMember({
+            email: form.email.value.trim(),
+            password: form.password.value,
+            firstName: form.firstName.value.trim(),
+            lastName: form.lastName.value.trim()
+          });
+          if (result?.verificationRequired) {
+            verificationStateToken = result.stateToken;
+            registerForm.hidden = true;
+            verifyForm.hidden = false;
+            verifyForm.code.focus();
+          }
+        } catch (error) {
+          console.error('[Maison Surga] member registration error', error);
+          errorEl.textContent = error.message || 'We could not create your account.';
+          errorEl.hidden = false;
+          button.disabled = false;
+          button.innerHTML = 'Create account <span>⟶</span>';
+        }
+      });
+
+      verifyForm?.addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const errorEl = form.querySelector('#account-verify-error');
+        const button = form.querySelector('button[type="submit"]');
+        errorEl.hidden = true;
+        button.disabled = true;
+        button.innerHTML = 'Verifying…';
+        try {
+          await verifyMemberRegistration({ code: form.code.value.trim(), stateToken: verificationStateToken });
+        } catch (error) {
+          errorEl.textContent = error.message || 'We could not verify that code.';
+          errorEl.hidden = false;
+          button.disabled = false;
+          button.innerHTML = 'Verify email <span>⟶</span>';
         }
       });
     } catch (error) {
@@ -815,6 +931,8 @@
     getMyMember,
     startLogin,
     loginMember,
+    registerMember,
+    verifyMemberRegistration,
     authorizeMemberSession,
     completeLoginFromCallback,
     logout,
