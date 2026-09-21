@@ -417,29 +417,9 @@
   const renderAccount = async () => {
     const panel = document.getElementById('account-content');
     if (!panel) return;
-    panel.innerHTML = '<div class="bag-loading">Checking your account…</div>';
-
-    try {
-      const member = await getMyMember();
-      if (!member) {
-        panel.innerHTML = `<p>Your existing Maison Surga account remains securely hosted by Wix while this new storefront is in staging.</p>
-          <a class="button dark" href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Open current member area <span>⟶</span></a>
-          <small class="account-note">Cart and checkout are already connected here. Native member sign-in will only replace this handoff after Wix Headless authentication passes our tests.</small>`;
-        return;
-      }
-
-      const displayName = member.profile?.nickname || member.profile?.firstName || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
-      panel.innerHTML = `<div class="account-signed-in">
-          <span class="account-status">SIGNED IN</span>
-          <h3>Welcome, ${displayName}.</h3>
-          ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
-          <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
-        </div>`;
-      panel.querySelector('.account-logout')?.addEventListener('click', logout);
-    } catch (error) {
-      panel.innerHTML = '<p>We could not load your account right now.</p>';
-      console.error('[Maison Surga] account error', error);
-    }
+    panel.innerHTML = `<p>Your existing Maison Surga account remains securely hosted by Wix while this new storefront is in staging.</p>
+      <a class="button dark" href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Open current member area <span>⟶</span></a>
+      <small class="account-note">Cart and checkout are connected to the existing store. Native member sign-in will replace this handoff only after Wix Headless authentication passes our tests.</small>`;
   };
 
   const showNotice = (message, type = 'success') => {
