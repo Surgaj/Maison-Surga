@@ -41,8 +41,10 @@ jobs:
               button:{text:document.querySelector('#add-to-bag')?.textContent,disabled:document.querySelector('#add-to-bag')?.disabled},
               bag:document.querySelector('.bag-count')?.textContent
             })));
-            const pink=await page.$x("//button[contains(@class,'variant-choice') and normalize-space()='Pink']");
-            if(pink[0]) await pink[0].click();
+            await page.evaluate(()=>{
+              const pink=[...document.querySelectorAll('.variant-choice')].find(x=>x.textContent.trim()==='Pink');
+              pink?.click();
+            });
             await page.click('#add-to-bag');
             await new Promise(r=>setTimeout(r,5000));
             console.log('AFTER_ADD',await page.evaluate(()=>({
