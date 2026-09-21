@@ -91,9 +91,11 @@ jobs:
             assert(/^https:\/\//.test(checkoutHref||''),'Wix checkout URL was not returned');
             const checkoutPage=await browser.newPage();
             const checkoutResponse=await checkoutPage.goto(checkoutHref,{waitUntil:'domcontentloaded',timeout:60000});
-            console.log('CHECKOUT_PAGE',{status:checkoutResponse?.status(),url:checkoutPage.url(),title:await checkoutPage.title()});
-            assert((checkoutResponse?.status()||500)<400,'Wix hosted checkout did not load');
-            assert(checkoutPage.url().includes('/checkout'),'Checkout handoff did not reach Wix checkout');
+            const checkoutState={status:checkoutResponse?.status(),url:checkoutPage.url(),title:await checkoutPage.title(),text:(await checkoutPage.evaluate(()=>document.body.innerText)).slice(0,12000)};
+            console.log('CHECKOUT_PAGE',{status:checkoutState.status,url:checkoutState.url,title:checkoutState.title,hasProduct:/Facial Cleansing Brush/i.test(checkoutState.text),hasTotal:checkoutState.text.includes('29.98')});
+            assert((checkoutState.status||500)<400,'Wix hosted checkout did not load');
+            assert(checkoutState.url.includes('/checkout'),'Checkout handoff did not reach Wix checkout');
+            assert(/Facial Cleansing Brush/i.test(checkoutState.text),'Checkout did not contain the selected product');
             await checkoutPage.close();
 
             await page.click('[data-cart-action="decrease"]');
@@ -137,31 +139,6 @@ jobs:
               assert(navState.url.startsWith('https://surgaj.github.io/Maison-Surga/collection.html'),'Category left the new storefront');
               assert(navState.h1,'Category page did not render');
             }
-
-            const legacy=await browser.newPage();
-            await legacy.goto('https://www.maisonsurga.com/',{waitUntil:'networkidle2',timeout:60000});
-            const memberLinks=await legacy.evaluate(()=>({
-              anchors:[...document.querySelectorAll('a[href]')].map(a=>({text:(a.innerText||a.getAttribute('aria-label')||'').trim(),href:a.href})).filter(x=>/account|member|order|login|log in|sign in/i.test(x.text+' '+x.href)).slice(0,30),
-              buttons:[...document.querySelectorAll('button')].map(b=>(b.innerText||b.getAttribute('aria-label')||'').trim()).filter(x=>/account|member|login|log in|sign in/i.test(x)).slice(0,30)
-            }));
-            console.log('LEGACY_MEMBER_DISCOVERY',memberLinks);
-            const loginClicked=await legacy.evaluate(()=>{
-              const button=[...document.querySelectorAll('button')].find(b=>/log in|login|sign in/i.test((b.innerText||b.getAttribute('aria-label')||'').trim()));
-              if(!button) return false;
-              button.click();
-              return true;
-            });
-            if(loginClicked){
-              await new Promise(r=>setTimeout(r,3000));
-              const loginState=await legacy.evaluate(()=>({
-                url:location.href,
-                dialogs:[...document.querySelectorAll('[role="dialog"],dialog')].map(d=>(d.innerText||'').trim()).filter(Boolean).slice(0,5),
-                forms:[...document.querySelectorAll('form')].map(f=>(f.innerText||'').trim()).filter(Boolean).slice(0,5),
-                inputs:[...document.querySelectorAll('input')].map(i=>({type:i.type,name:i.name,placeholder:i.placeholder})).slice(0,20)
-              }));
-              console.log('LEGACY_LOGIN_CLICK',loginState);
-            }
-            await legacy.close();
 
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
