@@ -142,9 +142,29 @@ jobs:
 
             const hosted=await browser.newPage();
             await hosted.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=hosted-login',{waitUntil:'networkidle2',timeout:60000});
-            await hosted.evaluate(()=>window.MaisonWix.startLogin());
-            await new Promise(r=>setTimeout(r,5000));
-            console.log('HOSTED_LOGIN_DIAGNOSTIC',{url:hosted.url(),title:await hosted.title()});
+            const hostedResult=await hosted.evaluate(async()=>{
+              try{
+                const data=await window.MaisonWix.api('/_api/redirects-api/v1/redirect-session',{
+                  method:'POST',
+                  body:JSON.stringify({
+                    auth:{authRequest:{
+                      redirectUri:'https://surgaj.github.io/Maison-Surga/auth-callback.html',
+                      clientId:window.MaisonWix.CLIENT_ID,
+                      codeChallenge:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                      codeChallengeMethod:'S256',
+                      responseMode:'fragment',
+                      responseType:'code',
+                      scope:'offline_access',
+                      state:'e2e-hosted-login'
+                    }}
+                  })
+                });
+                return {ok:true,url:data?.redirectSession?.fullUrl||null};
+              }catch(error){
+                return {ok:false,message:error?.message,status:error?.status,data:error?.data||null};
+              }
+            });
+            console.log('HOSTED_LOGIN_DIAGNOSTIC',hostedResult);
             await hosted.close();
 
             await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v11',{waitUntil:'networkidle2',timeout:60000});
