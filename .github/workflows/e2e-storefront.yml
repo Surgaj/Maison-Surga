@@ -128,6 +128,18 @@ jobs:
             assert(account.dialog,'Account dialog did not open');
             assert(account.email && account.password && account.submit,'Native account login form did not render');
 
+            await page.type('#account-email','maison-surga-login-test@example.invalid');
+            await page.type('#account-password','WrongPassword123!');
+            await page.click('.account-login');
+            await new Promise(r=>setTimeout(r,5000));
+            const loginFailure=await page.evaluate(()=>({
+              error:document.querySelector('#account-login-error')?.textContent,
+              hidden:document.querySelector('#account-login-error')?.hidden,
+              button:document.querySelector('.account-login')?.textContent
+            }));
+            console.log('LOGIN_FAILURE_DIAGNOSTIC',loginFailure);
+            assert(loginFailure.hidden===false,'Login failure did not surface a user-visible error');
+
             await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v11',{waitUntil:'networkidle2',timeout:60000});
             await page.click('[data-dialog="search-dialog"]');
             await page.type('#search-input','brush');
