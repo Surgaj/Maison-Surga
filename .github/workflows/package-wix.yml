@@ -1,0 +1,36 @@
+name: Package Maison Surga for Wix Headless
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "index.html"
+      - "product.html"
+      - "collection.html"
+      - "about.html"
+      - "help.html"
+      - "auth-callback.html"
+      - "css/**"
+      - "js/**"
+      - "assets/**"
+      - ".github/workflows/package-wix.yml"
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build clean Wix upload package
+        run: |
+          rm -rf wix-package
+          mkdir -p wix-package/css wix-package/js wix-package/assets
+          cp index.html product.html collection.html about.html help.html auth-callback.html wix-package/
+          cp css/* wix-package/css/
+          cp js/* wix-package/js/
+          cp -R assets/* wix-package/assets/
+          cd wix-package
+          zip -r ../Maison-Surga-Wix-Headless.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Maison-Surga-Wix-Headless
+          path: Maison-Surga-Wix-Headless.zip
+          if-no-files-found: error
+          retention-days: 7
