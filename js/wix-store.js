@@ -412,8 +412,36 @@
     throw new Error(data.message || 'That verification code could not be confirmed.');
   };
 
-  const startLogin = () => {
-    document.getElementById('account-email')?.focus();
+  const startLogin = async () => {
+    const redirectUri = new URL('auth-callback.html', location.href).href;
+    const verifier = randomBase64Url(48);
+    const challenge = await sha256Base64Url(verifier);
+    const state = randomBase64Url(24);
+    const returnTo = location.href.split('#')[0];
+
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ verifier, state, redirectUri, returnTo }));
+
+    const data = await api('/_api/redirects-api/v1/redirect-session', {
+      method: 'POST',
+      body: JSON.stringify({
+        auth: {
+          authRequest: {
+            redirectUri,
+            clientId: CLIENT_ID,
+            codeChallenge: challenge,
+            codeChallengeMethod: 'S256',
+            responseMode: 'fragment',
+            responseType: 'code',
+            scope: 'offline_access',
+            state
+          }
+        }
+      })
+    });
+
+    const url = data?.redirectSession?.fullUrl;
+    if (!url) throw new Error('Wix login URL was not returned.');
+    location.href = url;
   };
 
   const completeLoginFromCallback = async () => {
@@ -640,111 +668,23 @@
         return;
       }
 
-      panel.innerHTML = `<div class="account-switch" role="tablist" aria-label="Account">
-        <button type="button" data-account-mode="login" aria-pressed="true">Sign in</button>
-        <button type="button" data-account-mode="register" aria-pressed="false">Create account</button>
-      </div>
-      <form class="account-form" id="account-login-form">
-        <p>Welcome back to Maison Surga.</p>
-        <label>Email<input id="account-email" name="email" type="email" autocomplete="email" required></label>
-        <label>Password<input id="account-password" name="password" type="password" autocomplete="current-password" required minlength="6"></label>
-        <p class="account-form-error" id="account-login-error" role="alert" hidden></p>
-        <button class="button dark account-login" type="submit">Sign in securely <span>⟶</span></button>
-      </form>
-      <form class="account-form" id="account-register-form" hidden>
-        <p>Create your Maison Surga account.</p>
-        <div class="account-name-row"><label>First name<input name="firstName" type="text" autocomplete="given-name" required></label><label>Last name<input name="lastName" type="text" autocomplete="family-name" required></label></div>
-        <label>Email<input name="email" type="email" autocomplete="email" required></label>
-        <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
-        <p class="account-form-error" id="account-register-error" role="alert" hidden></p>
-        <button class="button dark account-register" type="submit">Create account <span>⟶</span></button>
-      </form>
-      <form class="account-form account-verify-form" id="account-verify-form" hidden>
-        <p>We sent a verification code to your email.</p>
-        <label>Verification code<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
-        <p class="account-form-error" id="account-verify-error" role="alert" hidden></p>
-        <button class="button dark" type="submit">Verify email <span>⟶</span></button>
-      </form>
-      <small class="account-note">Authentication is handled by Wix. Maison Surga does not store your password in this storefront.</small>`;
+      panel.innerHTML = `<div class="account-managed-login">
+        <p>Sign in securely with your Maison Surga member account.</p>
+        <button class="button dark account-login" type="button">Continue to secure sign in <span>⟶</span></button>
+        <small class="account-note">Sign-in and account creation are securely handled by Wix. Available login methods are shown on the next screen.</small>
+      </div>`;
 
-      let verificationStateToken = null;
-      const loginForm = panel.querySelector('#account-login-form');
-      const registerForm = panel.querySelector('#account-register-form');
-      const verifyForm = panel.querySelector('#account-verify-form');
-      const switches = [...panel.querySelectorAll('[data-account-mode]')];
-
-      switches.forEach(control => control.addEventListener('click', () => {
-        const mode = control.dataset.accountMode;
-        switches.forEach(item => item.setAttribute('aria-pressed', String(item === control)));
-        loginForm.hidden = mode !== 'login';
-        registerForm.hidden = mode !== 'register';
-        verifyForm.hidden = true;
-      }));
-
-      loginForm?.addEventListener('submit', async event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const errorEl = form.querySelector('#account-login-error');
-        const button = form.querySelector('.account-login');
-        errorEl.hidden = true;
+      panel.querySelector('.account-login')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
         button.disabled = true;
-        button.innerHTML = 'Signing in…';
+        button.innerHTML = 'Opening secure sign in…';
         try {
-          await loginMember(form.email.value.trim(), form.password.value);
+          await startLogin();
         } catch (error) {
-          console.error('[Maison Surga] member login error', error);
-          errorEl.textContent = 'We could not sign you in. Check your email and password and try again.';
-          errorEl.hidden = false;
+          console.error('[Maison Surga] managed login error', error);
           button.disabled = false;
-          button.innerHTML = 'Sign in securely <span>⟶</span>';
-        }
-      });
-
-      registerForm?.addEventListener('submit', async event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const errorEl = form.querySelector('#account-register-error');
-        const button = form.querySelector('.account-register');
-        errorEl.hidden = true;
-        button.disabled = true;
-        button.innerHTML = 'Creating account…';
-        try {
-          const result = await registerMember({
-            email: form.email.value.trim(),
-            password: form.password.value,
-            firstName: form.firstName.value.trim(),
-            lastName: form.lastName.value.trim()
-          });
-          if (result?.verificationRequired) {
-            verificationStateToken = result.stateToken;
-            registerForm.hidden = true;
-            verifyForm.hidden = false;
-            verifyForm.code.focus();
-          }
-        } catch (error) {
-          console.error('[Maison Surga] member registration error', error);
-          errorEl.textContent = error.message || 'We could not create your account.';
-          errorEl.hidden = false;
-          button.disabled = false;
-          button.innerHTML = 'Create account <span>⟶</span>';
-        }
-      });
-
-      verifyForm?.addEventListener('submit', async event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const errorEl = form.querySelector('#account-verify-error');
-        const button = form.querySelector('button[type="submit"]');
-        errorEl.hidden = true;
-        button.disabled = true;
-        button.innerHTML = 'Verifying…';
-        try {
-          await verifyMemberRegistration({ code: form.code.value.trim(), stateToken: verificationStateToken });
-        } catch (error) {
-          errorEl.textContent = error.message || 'We could not verify that code.';
-          errorEl.hidden = false;
-          button.disabled = false;
-          button.innerHTML = 'Verify email <span>⟶</span>';
+          button.innerHTML = 'Continue to secure sign in <span>⟶</span>';
+          showNotice('We could not open secure sign in. Please try again.', 'error');
         }
       });
     } catch (error) {
