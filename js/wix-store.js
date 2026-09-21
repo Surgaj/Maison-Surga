@@ -3,6 +3,7 @@
   const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
   const TOKEN_KEY = 'maisonSurgaWixVisitorV1';
   const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
+  const FAVOURITES_KEY = 'maisonSurgaFavouritesV1';
   const CART_KEY = 'maisonSurgaWixCartV1';
   const API_ROOT = 'https://www.wixapis.com';
   const DEFAULT_PRODUCT_ID = 'b3264b49-f087-482a-bb94-1bd1f104249e';
@@ -292,7 +293,8 @@
       }
 
       status.textContent = `${cards.length} products in this edit`;
-      grid.innerHTML = cards.map(({product,price}) => `<a class="product-card" href="product.html?id=${encodeURIComponent(product.id)}">
+      grid.innerHTML = cards.map(({product,price}) => `<a class="product-card" href="product.html?id=${encodeURIComponent(product.id)}" data-product-id="${product.id}" data-product-name="${product.name.replace(/"/g,'&quot;')}" data-product-image="${productImage(product)}" data-product-price="${price || ''}">
+        <button class="favourite-button product-card-favourite" type="button" data-favourite-id="${product.id}" aria-label="Save to favourites" aria-pressed="false">♡</button>
         <div class="product-card-image">${productImage(product) ? `<img src="${productImage(product)}" alt="${product.name}" loading="lazy">` : '<div class="product-card-placeholder"></div>'}</div>
         <div class="product-card-copy">
           <span class="product-card-category">${config.title}</span>
@@ -300,6 +302,18 @@
           <div><strong>${price || 'View product'}</strong><span>View <b>⟶</b></span></div>
         </div>
       </a>`).join('');
+
+      grid.querySelectorAll('.product-card-favourite').forEach(button => {
+        button.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const card = button.closest('.product-card');
+          const result = toggleFavourite(favouritePayloadFromCard(card));
+          syncFavouriteButtons();
+          showNotice(result.saved ? 'Saved to favourites.' : 'Removed from favourites.');
+        });
+      });
+      syncFavouriteButtons();
     } catch (error) {
       console.error('[Maison Surga] collection error', error);
       root.querySelector('.catalog-status').textContent = 'We could not load this edit right now. Please try again.';
@@ -556,6 +570,47 @@
     return cart;
   };
 
+  const getFavourites = () => {
+    try { return JSON.parse(localStorage.getItem(FAVOURITES_KEY) || '[]'); }
+    catch { return []; }
+  };
+
+  const saveFavourites = items => {
+    localStorage.setItem(FAVOURITES_KEY, JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent('surga:favourites-updated', { detail: items }));
+    return items;
+  };
+
+  const isFavourite = productId => getFavourites().some(item => item.id === productId);
+
+  const toggleFavourite = product => {
+    const current = getFavourites();
+    const exists = current.some(item => item.id === product.id);
+    const next = exists
+      ? current.filter(item => item.id !== product.id)
+      : [product, ...current.filter(item => item.id !== product.id)].slice(0, 50);
+    saveFavourites(next);
+    return { saved: !exists, items: next };
+  };
+
+  const syncFavouriteButtons = () => {
+    document.querySelectorAll('[data-favourite-id]').forEach(button => {
+      const saved = isFavourite(button.dataset.favouriteId);
+      button.setAttribute('aria-pressed', String(saved));
+      button.setAttribute('aria-label', saved ? 'Remove from favourites' : 'Save to favourites');
+      button.classList.toggle('saved', saved);
+      button.textContent = saved ? '♥' : '♡';
+    });
+  };
+
+  const favouritePayloadFromCard = card => ({
+    id: card.dataset.productId,
+    name: card.dataset.productName,
+    image: card.dataset.productImage || '',
+    price: card.dataset.productPrice || '',
+    url: card.getAttribute('href') || `product.html?id=${encodeURIComponent(card.dataset.productId)}`
+  });
+
   const renderBag = async (cartOverride = null) => {
     const panel = document.getElementById('bag-content');
     const countEl = document.querySelector('.bag-count');
@@ -688,13 +743,91 @@
       if (!member) return;
 
       const displayName = member.profile?.nickname || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
-      panel.innerHTML = `<div class="account-signed-in">
-        <span class="account-status">SIGNED IN</span>
-        <h3>Welcome, ${displayName}.</h3>
-        ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
-        <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
+      const favourites = getFavourites();
+      const cart = await getCurrentCart().catch(() => savedCart());
+
+      panel.innerHTML = `<div class="account-hub">
+        <div class="account-hub-head">
+          <span class="account-status">SIGNED IN</span>
+          <h3>Welcome, ${displayName}.</h3>
+          ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
+        </div>
+        <div class="account-tabs" role="tablist" aria-label="Your Maison Surga">
+          <button type="button" data-account-tab="orders" aria-selected="true">Orders</button>
+          <button type="button" data-account-tab="favourites" aria-selected="false">Favourites <span>${favourites.length}</span></button>
+          <button type="button" data-account-tab="bag" aria-selected="false">Bag <span>${lineItemCount(cart)}</span></button>
+          <button type="button" data-account-tab="profile" aria-selected="false">Account</button>
+        </div>
+        <div class="account-tab-panel" id="account-tab-panel"></div>
       </div>`;
-      panel.querySelector('.account-logout')?.addEventListener('click', logout);
+
+      const tabPanel = panel.querySelector('#account-tab-panel');
+      const tabs = [...panel.querySelectorAll('[data-account-tab]')];
+
+      const renderTab = async tab => {
+        tabs.forEach(button => button.setAttribute('aria-selected', String(button.dataset.accountTab === tab)));
+
+        if (tab === 'orders') {
+          tabPanel.innerHTML = `<section class="account-section">
+            <p class="eyebrow">MY ORDERS</p>
+            <h4>Purchase history</h4>
+            <p>Your Wix member area keeps your current and past store orders, order details and tracking information.</p>
+            <a class="button dark" href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Open secure order history <span>⟶</span></a>
+            <small>On the Wix member area, choose <strong>My Orders</strong>.</small>
+          </section>`;
+          return;
+        }
+
+        if (tab === 'favourites') {
+          const items = getFavourites();
+          if (!items.length) {
+            tabPanel.innerHTML = `<section class="account-section account-empty"><p class="eyebrow">FAVOURITES</p><h4>Your saved edit is empty.</h4><p>Tap the heart on any product to keep it here.</p><a class="text-link" href="collection.html?category=skincare">Explore the edits <span>⟶</span></a></section>`;
+            return;
+          }
+          tabPanel.innerHTML = `<section class="account-section"><p class="eyebrow">FAVOURITES</p><div class="account-favourites">${items.map(item => `<article class="account-favourite" data-favourite-row="${item.id}">
+            ${item.image ? `<img src="${item.image}" alt="">` : '<div class="account-favourite-placeholder"></div>'}
+            <div><a href="${item.url || `product.html?id=${encodeURIComponent(item.id)}`}"><strong>${item.name}</strong></a><small>${item.price || ''}</small></div>
+            <button type="button" data-remove-favourite="${item.id}" aria-label="Remove ${item.name} from favourites">×</button>
+          </article>`).join('')}</div><small class="account-favourites-note">Favourites are saved on this device during staging.</small></section>`;
+          tabPanel.querySelectorAll('[data-remove-favourite]').forEach(remove => remove.addEventListener('click', () => {
+            saveFavourites(getFavourites().filter(item => item.id !== remove.dataset.removeFavourite));
+            const favTab = tabs.find(button => button.dataset.accountTab === 'favourites')?.querySelector('span');
+            if (favTab) favTab.textContent = getFavourites().length;
+            renderTab('favourites');
+            syncFavouriteButtons();
+          }));
+          return;
+        }
+
+        if (tab === 'bag') {
+          const activeCart = await getCurrentCart().catch(() => savedCart());
+          const items = activeCart?.lineItems || [];
+          if (!items.length) {
+            tabPanel.innerHTML = `<section class="account-section account-empty"><p class="eyebrow">MY BAG</p><h4>Your beauty bag is empty.</h4><a class="text-link" href="collection.html?category=skincare">Start shopping <span>⟶</span></a></section>`;
+            return;
+          }
+          tabPanel.innerHTML = `<section class="account-section"><p class="eyebrow">MY BAG</p><div class="account-bag-lines">${items.map(item => `<div class="account-bag-line"><div><strong>${lineName(item)}</strong><small>Qty ${quantityOf(item)}</small></div><span>${money(linePrice(item))}</span></div>`).join('')}</div><div class="account-bag-total"><span>Subtotal</span><strong>${money(activeCart.subtotal)}</strong></div><button class="button dark account-open-bag" type="button">Open bag & checkout <span>⟶</span></button></section>`;
+          tabPanel.querySelector('.account-open-bag')?.addEventListener('click', async () => {
+            document.getElementById('account-dialog')?.close();
+            document.body.classList.remove('locked');
+            await renderBag(activeCart);
+            const bagDialog = document.getElementById('bag-dialog');
+            if (bagDialog && !bagDialog.open) bagDialog.showModal();
+            document.body.classList.add('locked');
+          });
+          return;
+        }
+
+        tabPanel.innerHTML = `<section class="account-section"><p class="eyebrow">MY ACCOUNT</p><h4>${displayName}</h4>${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}<button class="text-link account-logout" type="button">Sign out <span>⟶</span></button></section>`;
+        tabPanel.querySelector('.account-logout')?.addEventListener('click', logout);
+      };
+
+      tabs.forEach(button => button.addEventListener('click', () => renderTab(button.dataset.accountTab)));
+      window.addEventListener('surga:favourites-updated', event => {
+        const favTab = tabs.find(button => button.dataset.accountTab === 'favourites')?.querySelector('span');
+        if (favTab) favTab.textContent = event.detail.length;
+      }, { once: true });
+      await renderTab('orders');
     } catch (error) {
       console.warn('[Maison Surga] account session check unavailable; sign in remains available.', error);
     }
@@ -815,6 +948,23 @@
       button.disabled = false;
       button.textContent = 'Add to bag';
 
+      const favouriteButton = document.getElementById('product-favourite');
+      if (favouriteButton) {
+        favouriteButton.dataset.favouriteId = productId;
+        favouriteButton.addEventListener('click', () => {
+          const result = toggleFavourite({
+            id: productId,
+            name: product.name,
+            image: productImage(product),
+            price: money(selected?.price?.actualPrice),
+            url: `product.html?id=${encodeURIComponent(productId)}`
+          });
+          syncFavouriteButtons();
+          showNotice(result.saved ? 'Saved to favourites.' : 'Removed from favourites.');
+        });
+        syncFavouriteButtons();
+      }
+
       button.addEventListener('click', async () => {
         const original = button.textContent;
         button.disabled = true;
@@ -889,6 +1039,9 @@
     logout,
     lineItemCount,
     quantityOf,
+    getFavourites,
+    toggleFavourite,
+    syncFavouriteButtons,
     updateLineQuantity,
     removeLineItem,
     savedCart,
