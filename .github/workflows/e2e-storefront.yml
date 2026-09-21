@@ -35,7 +35,7 @@ jobs:
             page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
             page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v9',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v11',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
             const initial=await page.evaluate(()=>({
               price:document.querySelector('#product-price')?.textContent,
@@ -120,26 +120,46 @@ jobs:
             const account=await page.evaluate(()=>({
               dialog:document.querySelector('#account-dialog')?.open,
               content:document.querySelector('#account-content')?.innerText,
-              link:document.querySelector('#account-content a')?.href
+              email:!!document.querySelector('#account-email'),
+              password:!!document.querySelector('#account-password'),
+              submit:!!document.querySelector('.account-login')
             }));
             console.log('ACCOUNT',account);
             assert(account.dialog,'Account dialog did not open');
-            assert(account.link?.startsWith('https://www.maisonsurga.com/'),'Account staging handoff missing');
+            assert(account.email && account.password && account.submit,'Native account login form did not render');
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v9',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v11',{waitUntil:'networkidle2',timeout:60000});
             await page.click('[data-dialog="search-dialog"]');
             await page.type('#search-input','brush');
             await page.waitForFunction(()=>document.querySelector('#search-results')?.innerText.includes('Facial Cleansing Brush'),{timeout:10000});
             console.log('SEARCH_OK',await page.evaluate(()=>document.querySelector('#search-results')?.innerText));
             await page.evaluate(()=>document.querySelector('#search-dialog')?.close());
 
-            for(const category of ['skin','hair','tools']){
+            for(const category of ['skincare','tools','makeup','selfcare']){
               await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category='+category,{waitUntil:'networkidle2',timeout:60000});
-              const navState=await page.evaluate(()=>({title:document.title,h1:document.querySelector('#collection-content h1')?.textContent,url:location.href}));
+              await page.waitForFunction(()=>document.querySelectorAll('.product-card').length>=4,{timeout:30000});
+              const navState=await page.evaluate(()=>({
+                title:document.title,
+                h1:document.querySelector('#collection-content h1')?.textContent,
+                url:location.href,
+                cards:document.querySelectorAll('.product-card').length,
+                internal:[...document.querySelectorAll('.product-card')].every(a=>a.getAttribute('href')?.startsWith('product.html?id='))
+              }));
               console.log('CATEGORY_'+category.toUpperCase(),navState);
               assert(navState.url.startsWith('https://surgaj.github.io/Maison-Surga/collection.html'),'Category left the new storefront');
-              assert(navState.h1,'Category page did not render');
+              assert(navState.h1 && navState.cards>=4 && navState.internal,'Category catalog did not render real internal product cards');
             }
+
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?id=e9059439-4894-48cf-81b4-fe1bcfe3d6d1',{waitUntil:'networkidle2',timeout:60000});
+            await page.waitForFunction(()=>document.querySelector('#product-title')?.textContent.includes('White Jade Roller'),{timeout:30000});
+            const genericProduct=await page.evaluate(()=>({
+              title:document.querySelector('#product-title')?.textContent,
+              price:document.querySelector('#product-price')?.textContent,
+              add:document.querySelector('#add-to-bag')?.textContent,
+              images:document.querySelectorAll('#live-gallery img').length
+            }));
+            console.log('GENERIC_PRODUCT',genericProduct);
+            assert(genericProduct.add==='Add to bag' && genericProduct.images>=1,'Generic Wix product page did not initialise');
 
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
