@@ -649,47 +649,54 @@
     }
   };
 
+  const renderSignedOutAccount = panel => {
+    panel.innerHTML = `<div class="account-managed-login">
+      <p>Sign in securely with your Maison Surga member account.</p>
+      <button class="button dark account-login" type="button">Continue to secure sign in <span>⟶</span></button>
+      <small class="account-note">Sign-in and account creation are securely handled by Wix. Available login methods are shown on the next screen.</small>
+    </div>`;
+
+    panel.querySelector('.account-login')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.innerHTML = 'Opening secure sign in…';
+      try {
+        await startLogin();
+      } catch (error) {
+        console.error('[Maison Surga] managed login error', error);
+        button.disabled = false;
+        button.innerHTML = 'Continue to secure sign in <span>⟶</span>';
+        showNotice('We could not open secure sign in. Please try again.', 'error');
+      }
+    });
+  };
+
   const renderAccount = async () => {
     const panel = document.getElementById('account-content');
     if (!panel) return;
-    panel.innerHTML = '<div class="bag-loading">Checking your account…</div>';
+
+    // Never trap the customer behind a loading state. The sign-in action is
+    // usable immediately while we quietly check whether a Wix member session exists.
+    renderSignedOutAccount(panel);
 
     try {
-      const member = await getMyMember();
-      if (member) {
-        const displayName = member.profile?.nickname || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
-        panel.innerHTML = `<div class="account-signed-in">
-          <span class="account-status">SIGNED IN</span>
-          <h3>Welcome, ${displayName}.</h3>
-          ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
-          <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
-        </div>`;
-        panel.querySelector('.account-logout')?.addEventListener('click', logout);
-        return;
-      }
+      const member = await Promise.race([
+        getMyMember(),
+        new Promise(resolve => setTimeout(() => resolve(null), 2500))
+      ]);
 
-      panel.innerHTML = `<div class="account-managed-login">
-        <p>Sign in securely with your Maison Surga member account.</p>
-        <button class="button dark account-login" type="button">Continue to secure sign in <span>⟶</span></button>
-        <small class="account-note">Sign-in and account creation are securely handled by Wix. Available login methods are shown on the next screen.</small>
+      if (!member) return;
+
+      const displayName = member.profile?.nickname || member.contact?.firstName || member.loginEmail || 'Maison Surga member';
+      panel.innerHTML = `<div class="account-signed-in">
+        <span class="account-status">SIGNED IN</span>
+        <h3>Welcome, ${displayName}.</h3>
+        ${member.loginEmail ? `<p>${member.loginEmail}</p>` : ''}
+        <button class="text-link account-logout" type="button">Sign out <span>⟶</span></button>
       </div>`;
-
-      panel.querySelector('.account-login')?.addEventListener('click', async event => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        button.innerHTML = 'Opening secure sign in…';
-        try {
-          await startLogin();
-        } catch (error) {
-          console.error('[Maison Surga] managed login error', error);
-          button.disabled = false;
-          button.innerHTML = 'Continue to secure sign in <span>⟶</span>';
-          showNotice('We could not open secure sign in. Please try again.', 'error');
-        }
-      });
+      panel.querySelector('.account-logout')?.addEventListener('click', logout);
     } catch (error) {
-      panel.innerHTML = '<p>We could not load your account right now.</p>';
-      console.error('[Maison Surga] account error', error);
+      console.warn('[Maison Surga] account session check unavailable; sign in remains available.', error);
     }
   };
 
