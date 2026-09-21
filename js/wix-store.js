@@ -546,11 +546,15 @@
   };
 
   const initBag = () => {
-    document.querySelector('[data-dialog="bag-dialog"]')?.addEventListener('click', renderBag);
-    window.addEventListener('surga:cart-updated', renderBag);
+    const countEl = document.querySelector('.bag-count');
+    const local = savedCart();
+    if (countEl && local) countEl.textContent = `(${lineItemCount(local)})`;
+
+    document.querySelector('[data-dialog="bag-dialog"]')?.addEventListener('click', () => renderBag());
+    window.addEventListener('surga:cart-updated', event => renderBag(event.detail || null));
+
     getCurrentCart()
       .then(cart => {
-        const countEl = document.querySelector('.bag-count');
         if (countEl) countEl.textContent = `(${lineItemCount(cart)})`;
       })
       .catch(error => console.warn('[Maison Surga] initial cart unavailable', error));
