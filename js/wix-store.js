@@ -116,12 +116,29 @@
     return cart || null;
   };
 
+  const getCartById = async cartId => {
+    if (!cartId) return null;
+    const data = await api(`/ecom/v2/carts/${encodeURIComponent(cartId)}`);
+    return saveCart(data.cart || null);
+  };
+
   const getCurrentCart = async () => {
+    const local = savedCart();
+
+    if (local?.id && local.orderPlaced !== true) {
+      try {
+        const persisted = await getCartById(local.id);
+        if (persisted) return persisted;
+      } catch (error) {
+        if (![401, 403, 404, 428].includes(error.status)) throw error;
+      }
+    }
+
     try {
       const data = await api('/ecom/v2/carts/current');
       return saveCart(data.cart || null);
     } catch (error) {
-      if ([404, 428].includes(error.status)) return savedCart();
+      if ([404, 428].includes(error.status)) return local;
       throw error;
     }
   };
@@ -548,6 +565,7 @@
     STORES_APP_ID,
     api,
     getCurrentCart,
+    getCartById,
     addToCart,
     getCheckoutUrl,
     queryVariants,
