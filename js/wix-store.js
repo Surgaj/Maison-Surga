@@ -250,19 +250,76 @@
     location.href = url;
   };
 
-  const lineItemCount = cart => (cart?.lineItems || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const quantityOf = item => Number(
+    item?.quantityInfo?.confirmedQuantity ??
+    item?.quantityInfo?.requestedQuantity ??
+    item?.quantity ??
+    0
+  );
+
+  const lineItemCount = cart => (cart?.lineItems || []).reduce((sum, item) => sum + quantityOf(item), 0);
 
   const money = value => {
     if (!value) return '';
-    return value.formattedAmount || (value.amount ? `£${Number(value.amount).toFixed(2)}` : '');
+    if (typeof value === 'string' || typeof value === 'number') {
+      const n = Number(value);
+      return Number.isFinite(n) ? `£${n.toFixed(2)}` : '';
+    }
+    return value.formattedAmount ||
+      value.formattedConvertedAmount ||
+      (value.amount != null && Number.isFinite(Number(value.amount)) ? `£${Number(value.amount).toFixed(2)}` : '');
   };
 
-  const lineImage = item => {
-    const media = item?.image || item?.media;
-    return media?.url || media?.image?.url || item?.catalogReference?.image?.url || '';
+  const lineImage = item =>
+    item?.attributes?.image?.url ||
+    item?.image?.url ||
+    item?.media?.url ||
+    item?.media?.image?.url ||
+    '';
+
+  const lineName = item =>
+    item?.name?.original ||
+    item?.name?.translated ||
+    item?.productName?.original ||
+    item?.productName ||
+    'Maison Surga item';
+
+  const descriptionOf = item => (item?.attributes?.descriptionLines || item?.descriptionLines || [])
+    .map(line => line?.plainText?.original || line?.plainText?.translated || line?.plainText || '')
+    .filter(Boolean)
+    .join(' · ');
+
+  const linePrice = item =>
+    item?.pricing?.totalPrice ||
+    item?.pricing?.unitPrice ||
+    item?.lineItemPrice ||
+    item?.price;
+
+  const updateLineQuantity = async (lineItemId, newQuantity) => {
+    if (newQuantity <= 0) return removeLineItem(lineItemId);
+    const data = await api('/ecom/v2/carts/current/update-line-items', {
+      method: 'POST',
+      body: JSON.stringify({
+        lineItems: [{
+          lineItemId,
+          quantity: { newQuantity }
+        }]
+      })
+    });
+    const cart = saveCart(data.cart || null);
+    window.dispatchEvent(new CustomEvent('surga:cart-updated', { detail: cart }));
+    return cart;
   };
 
-  const lineName = item => item?.productName?.original || item?.productName || item?.name || 'Maison Surga item';
+  const removeLineItem = async lineItemId => {
+    const data = await api('/ecom/v2/carts/current/remove-line-items', {
+      method: 'POST',
+      body: JSON.stringify({ lineItemIds: [lineItemId] })
+    });
+    const cart = saveCart(data.cart || null);
+    window.dispatchEvent(new CustomEvent('surga:cart-updated', { detail: cart }));
+    return cart;
+  };
 
   const renderBag = async (cartOverride = null) => {
     const panel = document.getElementById('bag-content');
@@ -286,17 +343,20 @@
 
       const lines = (cart.lineItems || []).map(item => {
         const image = lineImage(item);
-        const price = money(item?.price);
-        const description = (item?.descriptionLines || [])
-          .map(line => line?.plainText?.original || line?.plainText || '')
-          .filter(Boolean)
-          .join(' · ');
-        return `<article class="bag-line">
+        const price = money(linePrice(item));
+        const description = descriptionOf(item);
+        const quantity = quantityOf(item);
+        return `<article class="bag-line" data-line-item-id="${item.id}">
           ${image ? `<img src="${image}" alt="">` : '<div class="bag-line-placeholder"></div>'}
-          <div>
+          <div class="bag-line-copy">
             <strong>${lineName(item)}</strong>
             ${description ? `<small>${description}</small>` : ''}
-            <small>Qty ${Number(item.quantity || 1)}</small>
+            <div class="bag-quantity" aria-label="Quantity">
+              <button type="button" data-cart-action="decrease" aria-label="Decrease quantity">−</button>
+              <span>${quantity}</span>
+              <button type="button" data-cart-action="increase" aria-label="Increase quantity">+</button>
+              <button type="button" class="bag-remove" data-cart-action="remove">Remove</button>
+            </div>
           </div>
           <span>${price}</span>
         </article>`;
@@ -307,8 +367,31 @@
         <div class="bag-summary">
           <div><span>Subtotal</span><strong>${subtotal || 'Calculated at checkout'}</strong></div>
           <button class="button dark bag-checkout" type="button">Continue to secure checkout <span>⟶</span></button>
-          <small>Checkout and payment are securely handled by Wix.</small>
+          <small>Delivery, taxes and final total are confirmed securely at Wix checkout.</small>
         </div>`;
+
+      panel.querySelectorAll('[data-cart-action]').forEach(control => {
+        control.addEventListener('click', async event => {
+          const button = event.currentTarget;
+          const row = button.closest('[data-line-item-id]');
+          const id = row?.dataset.lineItemId;
+          const activeCart = savedCart() || cart;
+          const activeItem = activeCart?.lineItems?.find(item => item.id === id);
+          if (!id || !activeItem) return;
+          const currentQuantity = quantityOf(activeItem);
+          const action = button.dataset.cartAction;
+          panel.querySelectorAll('button').forEach(el => { el.disabled = true; });
+          try {
+            const updated = action === 'remove'
+              ? await removeLineItem(id)
+              : await updateLineQuantity(id, action === 'increase' ? currentQuantity + 1 : currentQuantity - 1);
+            await renderBag(updated);
+          } catch (error) {
+            showNotice(error.message || 'Unable to update your bag.', 'error');
+            await renderBag(activeCart);
+          }
+        });
+      });
 
       panel.querySelector('.bag-checkout')?.addEventListener('click', async event => {
         const button = event.currentTarget;
@@ -339,20 +422,9 @@
     try {
       const member = await getMyMember();
       if (!member) {
-        panel.innerHTML = `<p>Sign in with your Maison Surga member account.</p>
-          <button class="button dark account-login" type="button">Sign in securely <span>⟶</span></button>
-          <small class="account-note">Sign-in is securely handled by Wix.</small>`;
-        panel.querySelector('.account-login')?.addEventListener('click', async event => {
-          const button = event.currentTarget;
-          button.disabled = true;
-          button.textContent = 'Opening sign in…';
-          try { await startLogin(); }
-          catch (error) {
-            button.disabled = false;
-            button.textContent = 'Sign in securely';
-            showNotice(error.message || 'Unable to open sign in.', 'error');
-          }
-        });
+        panel.innerHTML = `<p>Your existing Maison Surga account remains securely hosted by Wix while this new storefront is in staging.</p>
+          <a class="button dark" href="https://www.maisonsurga.com/" target="_blank" rel="noopener">Open current member area <span>⟶</span></a>
+          <small class="account-note">Cart and checkout are already connected here. Native member sign-in will only replace this handoff after Wix Headless authentication passes our tests.</small>`;
         return;
       }
 
@@ -504,6 +576,9 @@
     completeLoginFromCallback,
     logout,
     lineItemCount,
+    quantityOf,
+    updateLineQuantity,
+    removeLineItem,
     savedCart,
     saveCart,
     renderBag,
