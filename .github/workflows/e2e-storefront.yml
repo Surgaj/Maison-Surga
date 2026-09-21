@@ -140,6 +140,13 @@ jobs:
             console.log('LOGIN_FAILURE_DIAGNOSTIC',loginFailure);
             assert(loginFailure.hidden===false,'Login failure did not surface a user-visible error');
 
+            const hosted=await browser.newPage();
+            await hosted.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=hosted-login',{waitUntil:'networkidle2',timeout:60000});
+            await hosted.evaluate(()=>window.MaisonWix.startLogin());
+            await new Promise(r=>setTimeout(r,5000));
+            console.log('HOSTED_LOGIN_DIAGNOSTIC',{url:hosted.url(),title:await hosted.title()});
+            await hosted.close();
+
             await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v11',{waitUntil:'networkidle2',timeout:60000});
             await page.click('[data-dialog="search-dialog"]');
             await page.type('#search-input','brush');
