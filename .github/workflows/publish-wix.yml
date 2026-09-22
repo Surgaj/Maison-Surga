@@ -1,0 +1,47 @@
+name: Publish Maison Surga to Wix
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/publish-wix.yml"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Wix release folder
+        shell: bash
+        run: |
+          rm -rf wix-release
+          mkdir -p wix-release
+          cp index.html product.html collection.html about.html help.html auth-callback.html wix-release/
+          cp -R css js assets wix-release/
+          cat > wix-release/wix.config.json <<'JSON'
+          {
+            "projectType": "Site",
+            "appId": "2619a3a7-2256-489b-9d45-fe662a5715c2",
+            "siteId": "b7c9bcc4-2a4a-4b22-81f8-504179cfa0fe",
+            "site": {
+              "outputDirectory": "."
+            }
+          }
+          JSON
+          grep -q "641c6446-c44e-434a-9b48-bc26624bdae0" wix-release/js/wix-store.js
+          grep -q "921a0414-d929-4e7f-ada1-c79234f22fe0" wix-release/js/wix-store.js
+
+      - name: Authorize Wix
+        working-directory: wix-release
+        shell: bash
+        run: |
+          echo "WIX_AUTH_START"
+          script -q -e -c "npx --yes wix login" /dev/null
+          echo "WIX_AUTH_DONE"
+
+      - name: Release current storefront to existing Wix Headless site
+        working-directory: wix-release
+        shell: bash
+        run: |
+          npx --yes wix release
