@@ -35,18 +35,16 @@ jobs:
             page.on('console',m=>logs.push('console '+m.type()+': '+m.text()));
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
             page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v11',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v17',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
             const initial=await page.evaluate(()=>({
               price:document.querySelector('#product-price')?.textContent,
-              pink:[...document.querySelectorAll('.variant-choice')].some(x=>x.textContent.trim()==='Pink'),
+              title:document.querySelector('#product-title')?.textContent,
               enabled:!document.querySelector('#add-to-bag')?.disabled
             }));
             console.log('INITIAL',initial);
             assert(initial.price==='£14.99','Live Wix price did not load');
-            assert(initial.pink && initial.enabled,'Live Wix variant controls did not load');
-
-            await page.evaluate(()=>[...document.querySelectorAll('.variant-choice')].find(x=>x.textContent.trim()==='Pink')?.click());
+            assert(initial.title==='Sonic Facial Cleansing Brush' && initial.enabled,'New Wix product did not load');
             await page.click('#add-to-bag');
             await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(1)',{timeout:20000});
             const afterAdd=await page.evaluate(()=>({
@@ -57,11 +55,11 @@ jobs:
             }));
             console.log('AFTER_ADD',afterAdd);
             assert(afterAdd.dialog && afterAdd.checkout,'Bag did not render after Add to bag');
-            assert(afterAdd.content.includes('Pink'),'Selected variant missing from bag');
+            assert(afterAdd.content.includes('Sonic Facial Cleansing Brush'),'New Wix product missing from bag');
 
             await page.evaluate(()=>document.querySelector('#bag-dialog')?.close());
             await page.click('[data-dialog="bag-dialog"]');
-            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Pink'),{timeout:10000});
+            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Sonic Facial Cleansing Brush'),{timeout:10000});
             console.log('REOPEN_BAG',await page.evaluate(()=>({
               bag:document.querySelector('.bag-count')?.textContent,
               content:document.querySelector('#bag-content')?.innerText
@@ -77,7 +75,7 @@ jobs:
             await page.reload({waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('.bag-count')?.textContent==='(2)',{timeout:20000});
             await page.click('[data-dialog="bag-dialog"]');
-            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Pink'),{timeout:10000});
+            await page.waitForFunction(()=>document.querySelector('#bag-content')?.innerText.includes('Sonic Facial Cleansing Brush'),{timeout:10000});
             console.log('PERSISTENCE',await page.evaluate(()=>({
               bag:document.querySelector('.bag-count')?.textContent,
               content:document.querySelector('#bag-content')?.innerText
@@ -136,7 +134,7 @@ jobs:
 
             const desktop=await browser.newPage();
             await desktop.setViewport({width:1440,height:900,deviceScaleFactor:1});
-            await desktop.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=desktop-account-v15',{waitUntil:'networkidle2',timeout:60000});
+            await desktop.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=desktop-account-v17',{waitUntil:'networkidle2',timeout:60000});
             await desktop.click('.account-button');
             await desktop.waitForFunction(()=>document.querySelector('#account-dialog')?.open,{timeout:10000});
             const desktopAccount=await desktop.evaluate(()=>({
@@ -148,14 +146,14 @@ jobs:
             assert(!/Checking your account/i.test(desktopAccount.content||''),'Desktop account remained stuck on loading state');
             await desktop.close();
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v11',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/index.html?e2e=nav-v17',{waitUntil:'networkidle2',timeout:60000});
             await page.click('[data-dialog="search-dialog"]');
             await page.type('#search-input','brush');
             await page.waitForFunction(()=>document.querySelector('#search-results')?.innerText.includes('Facial Cleansing Brush'),{timeout:10000});
             console.log('SEARCH_OK',await page.evaluate(()=>document.querySelector('#search-results')?.innerText));
             await page.evaluate(()=>document.querySelector('#search-dialog')?.close());
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category=skincare&e2e=favourites-v16',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/collection.html?category=skincare&e2e=favourites-v17',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelectorAll('.product-card').length>=4,{timeout:30000});
             const firstFavId=await page.evaluate(()=>document.querySelector('.product-card')?.dataset.productId);
             await page.click('.product-card-favourite');
@@ -190,7 +188,7 @@ jobs:
               assert(navState.h1 && navState.cards>=4 && navState.internal,'Category catalog did not render real internal product cards');
             }
 
-            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?id=e9059439-4894-48cf-81b4-fe1bcfe3d6d1',{waitUntil:'networkidle2',timeout:60000});
+            await page.goto('https://surgaj.github.io/Maison-Surga/product.html?id=26d4dc9b-d130-4489-bc72-3a8ed87662ec',{waitUntil:'networkidle2',timeout:60000});
             await page.waitForFunction(()=>document.querySelector('#product-title')?.textContent.includes('White Jade Roller'),{timeout:30000});
             const genericProduct=await page.evaluate(()=>({
               title:document.querySelector('#product-title')?.textContent,
