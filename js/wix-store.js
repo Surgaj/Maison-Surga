@@ -1,10 +1,10 @@
 (() => {
   const CLIENT_ID = '641c6446-c44e-434a-9b48-bc26624bdae0';
   const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
-  const TOKEN_KEY = 'maisonSurgaWixVisitorV1';
-  const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
+  const TOKEN_KEY = 'maisonSurgaWixVisitorV2';
+  const AUTH_KEY = 'maisonSurgaWixAuthFlowV2';
   const FAVOURITES_KEY = 'maisonSurgaFavouritesV1';
-  const CART_KEY = 'maisonSurgaWixCartV1';
+  const CART_KEY = 'maisonSurgaWixCartV2';
   const API_ROOT = 'https://www.wixapis.com';
   const DEFAULT_PRODUCT_ID = '921a0414-d929-4e7f-ada1-c79234f22fe0';
   const CATEGORY_CONFIG = {
