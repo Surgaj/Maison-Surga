@@ -92,6 +92,9 @@ jobs:
             await new Promise(r=>setTimeout(r,3000));
             const checkoutState={status:checkoutResponse?.status(),url:checkoutPage.url(),title:await checkoutPage.title()};
             console.log('CHECKOUT_PAGE',checkoutState);
+            await new Promise(r=>setTimeout(r,5000));
+            const checkoutText=(await checkoutPage.evaluate(()=>document.body.innerText)).slice(0,5000);
+            console.log('CHECKOUT_TEXT',checkoutText);
             assert((checkoutState.status||500)<400,'Wix hosted checkout did not load');
             assert(checkoutState.url.includes('/checkout'),'Checkout handoff did not reach Wix checkout');
             assert(/Checkout/i.test(checkoutState.title||''),'Wix checkout page title did not load');
