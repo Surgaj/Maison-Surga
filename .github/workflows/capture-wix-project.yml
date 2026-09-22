@@ -1,6 +1,9 @@
 name: Capture Wix Headless Project
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/capture-wix-project.yml"
 jobs:
   capture:
     runs-on: ubuntu-latest
