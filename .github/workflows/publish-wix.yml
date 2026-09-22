@@ -32,16 +32,23 @@ jobs:
           grep -q "641c6446-c44e-434a-9b48-bc26624bdae0" wix-release/js/wix-store.js
           grep -q "921a0414-d929-4e7f-ada1-c79234f22fe0" wix-release/js/wix-store.js
 
+      - name: Install Wix CLI
+        working-directory: wix-release
+        shell: bash
+        run: |
+          npm init -y
+          npm install --save-dev @wix/cli@latest
+
       - name: Authorize Wix
         working-directory: wix-release
         shell: bash
         run: |
           echo "WIX_AUTH_START"
-          script -q -e -c "npx --yes wix login" /dev/null
+          script -q -e -c "npx wix login" /dev/null
           echo "WIX_AUTH_DONE"
 
       - name: Release current storefront to existing Wix Headless site
         working-directory: wix-release
         shell: bash
         run: |
-          npx --yes wix release
+          npx wix release
