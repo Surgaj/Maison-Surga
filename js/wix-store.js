@@ -1,37 +1,37 @@
 (() => {
-  const CLIENT_ID = '4a256781-4f9d-4ae4-a7f6-2bcb9589c2fb';
+  const CLIENT_ID = '641c6446-c44e-434a-9b48-bc26624bdae0';
   const STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
   const TOKEN_KEY = 'maisonSurgaWixVisitorV1';
   const AUTH_KEY = 'maisonSurgaWixAuthFlowV1';
   const FAVOURITES_KEY = 'maisonSurgaFavouritesV1';
   const CART_KEY = 'maisonSurgaWixCartV1';
   const API_ROOT = 'https://www.wixapis.com';
-  const DEFAULT_PRODUCT_ID = 'b3264b49-f087-482a-bb94-1bd1f104249e';
+  const DEFAULT_PRODUCT_ID = '921a0414-d929-4e7f-ada1-c79234f22fe0';
   const CATEGORY_CONFIG = {
     skincare: {
-      id: '0d5da727-207f-44bc-951a-456e3e08957c',
-      curatedIds: ["b3264b49-f087-482a-bb94-1bd1f104249e","f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","9a468a63-1661-4e28-a818-47d6959d1c3d"],
+      id: 'b19521c7-4a3e-413a-b8a2-87e7f1b11eae',
+      curatedIds: ["921a0414-d929-4e7f-ada1-c79234f22fe0","f9ee22cc-f66c-4dfa-b18a-ab7b03e9fb43","26d4dc9b-d130-4489-bc72-3a8ed87662ec","d5c9e68a-a306-41d0-ad54-f96380e330eb"],
       title: 'Skincare',
       eyebrow: 'THE SKINCARE EDIT',
       description: 'Everyday rituals for cleansing, massage and mindful skin care.'
     },
     tools: {
-      id: 'c1aa6676-1ee4-46c9-82e7-8c2d8f8a017a',
-      curatedIds: ["f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","e8680269-c15a-4fe1-8bf5-d26a707d5727","7a74e237-aafd-425a-bd71-0b0fbe7cd9d8"],
+      id: '5eeb257b-acdb-465a-9712-549c3049b146',
+      curatedIds: ["f9ee22cc-f66c-4dfa-b18a-ab7b03e9fb43","26d4dc9b-d130-4489-bc72-3a8ed87662ec","e1d5417a-673b-4ef4-aa3f-8471019c2795","17b9ee5a-977f-4f11-8b12-dd0608b60a95"],
       title: 'Beauty Tools',
       eyebrow: 'THE BEAUTY TOOLS EDIT',
       description: 'Practical tools chosen to make everyday beauty feel a little more intentional.'
     },
     makeup: {
-      id: 'dbc8b26a-73ab-47cb-946b-f22f15ad1085',
-      curatedIds: ["02cfe8d1-4600-4b43-8561-8c9c7e506bc8","8bdb4295-79ef-4f3e-a0c9-cb41cd3543e4","7f493ad7-8919-4d0e-a0ad-f073dcefa575","c7ea6e66-7c67-40bf-9023-45ab80ad08eb"],
+      id: 'c7e33bf5-f5ac-48ed-991e-1adf0b3547de',
+      curatedIds: ["449315af-c124-4e0a-a332-de19f47c3675","a3df6154-22e8-4a33-a4fd-bf5f8af3f15e","87d840ef-306a-4954-b253-80fee04a1a62","04fc2d34-c6fc-4956-94cf-ff294431632c"],
       title: 'Makeup',
       eyebrow: 'THE MAKEUP EDIT',
       description: 'A focused edit of colour, texture and easy everyday beauty.'
     },
     selfcare: {
-      id: '021c7d81-2427-4a8f-8da7-79042bcca0b8',
-      curatedIds: ["0fdfba60-9cd9-4c7f-baba-6a570234a95f","b3264b49-f087-482a-bb94-1bd1f104249e","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","9a468a63-1661-4e28-a818-47d6959d1c3d"],
+      id: 'f91550a1-188e-43ed-82b8-5bfc1a18c19d',
+      curatedIds: ["a2a4f7ce-e84b-438b-bb7f-972ad2e6bbc4","921a0414-d929-4e7f-ada1-c79234f22fe0","26d4dc9b-d130-4489-bc72-3a8ed87662ec","d5c9e68a-a306-41d0-ad54-f96380e330eb"],
       title: 'Self-Care',
       eyebrow: 'THE SELF-CARE EDIT',
       description: 'Small comforts and slower rituals for moments that are just yours.'
