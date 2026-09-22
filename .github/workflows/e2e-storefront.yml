@@ -92,6 +92,7 @@ jobs:
             await new Promise(r=>setTimeout(r,3000));
             const checkoutState={status:checkoutResponse?.status(),url:checkoutPage.url(),title:await checkoutPage.title()};
             console.log('CHECKOUT_PAGE',checkoutState);
+            assert(new URL(checkoutPage.url()).hostname==='checkout.maisonsurga.com','Checkout did not move to checkout.maisonsurga.com');
             await new Promise(r=>setTimeout(r,5000));
             const checkoutText=(await checkoutPage.evaluate(()=>document.body.innerText)).slice(0,5000);
             console.log('CHECKOUT_TEXT',checkoutText);
@@ -132,6 +133,7 @@ jobs:
             await loginPage.evaluate(()=>window.MaisonWix.startLogin());
             await new Promise(r=>setTimeout(r,7000));
             const managedLogin={url:loginPage.url(),title:await loginPage.title(),text:(await loginPage.evaluate(()=>document.body.innerText)).slice(0,1800)};
+            assert(new URL(managedLogin.url).hostname==='checkout.maisonsurga.com','Managed login did not move to checkout.maisonsurga.com');
             console.log('MANAGED_LOGIN',managedLogin);
             assert(managedLogin.url.includes('maisonsurga.com') || managedLogin.url.includes('auth-callback.html'),'Managed sign-in did not hand off to Wix');
             await loginPage.close();
