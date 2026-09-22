@@ -1,0 +1,20 @@
+name: Capture Wix Headless Project
+on:
+  workflow_dispatch:
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download current Wix-managed project
+        run: |
+          curl -fL "https://www.wix.com/_api/wixstro-deployments/v1/instant-sites/b7c9bcc4-2a4a-4b22-81f8-504179cfa0fe/download.zip" -o wix-project.zip
+          unzip -q wix-project.zip -d wix-project
+          echo "FILES"
+          find wix-project -maxdepth 2 -type f | sort
+          echo "CONFIG"
+          cat wix-project/wix.config.json || find wix-project -name wix.config.json -print -exec cat {} \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wix-current-project
+          path: wix-project
+          retention-days: 1
