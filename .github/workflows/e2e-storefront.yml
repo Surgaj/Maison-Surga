@@ -199,6 +199,18 @@ jobs:
             console.log('GENERIC_PRODUCT',genericProduct);
             assert(genericProduct.add==='Add to bag' && genericProduct.images>=1,'Generic Wix product page did not initialise');
 
+            const wixHostPage=await browser.newPage();
+            const wixJsResponse=await wixHostPage.goto('https://instant-xcmckphpywnv-jesussurgaes-140c.wix-site-host.com/js/wix-store.js',{waitUntil:'domcontentloaded',timeout:60000});
+            const wixJsText=await wixHostPage.evaluate(()=>document.body.innerText);
+            const wixHostProbe={
+              status:wixJsResponse?.status(),
+              newClient:wixJsText.includes('641c6446-c44e-434a-9b48-bc26624bdae0'),
+              newProduct:wixJsText.includes('921a0414-d929-4e7f-ada1-c79234f22fe0'),
+              oldClient:wixJsText.includes('4a256781-4f9d-4ae4-a7f6-2bcb9589c2fb')
+            };
+            console.log('WIX_HOST_FRONTEND',wixHostProbe);
+            await wixHostPage.close();
+
             console.log('BROWSER_LOGS\n'+logs.join('\n'));
             await browser.close();
           })().catch(e=>{console.error(e);process.exit(1)});
