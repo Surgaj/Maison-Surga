@@ -17,14 +17,14 @@
     },
     tools: {
       id: 'c1aa6676-1ee4-46c9-82e7-8c2d8f8a017a',
-      curatedIds: ["f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","e8680269-c15a-4fe1-8bf5-d26a707d5727","7a74e237-aafd-425a-bd71-0b0fbe7cd9d8"],
+      curatedIds: ["f0b9c317-fcba-4029-9449-7f387d0a28a2","e9059439-4894-48cf-81b4-fe1bcfe3d6d1","5a3c9669-aae4-42ae-b60a-4ef11dc9f31b","9a468a63-1661-4e28-a818-47d6959d1c3d"],
       title: 'Beauty Tools',
       eyebrow: 'THE BEAUTY TOOLS EDIT',
       description: 'Practical tools chosen to make everyday beauty feel a little more intentional.'
     },
     makeup: {
       id: 'dbc8b26a-73ab-47cb-946b-f22f15ad1085',
-      curatedIds: ["02cfe8d1-4600-4b43-8561-8c9c7e506bc8","8bdb4295-79ef-4f3e-a0c9-cb41cd3543e4","7f493ad7-8919-4d0e-a0ad-f073dcefa575","c7ea6e66-7c67-40bf-9023-45ab80ad08eb"],
+      curatedIds: ["7a74e237-aafd-425a-bd71-0b0fbe7cd9d8","c7ea6e66-7c67-40bf-9023-45ab80ad08eb","efc70f60-def4-4988-a717-a5b31e54fe40","e8680269-c15a-4fe1-8bf5-d26a707d5727"],
       title: 'Makeup',
       eyebrow: 'THE MAKEUP EDIT',
       description: 'A focused edit of colour, texture and easy everyday beauty.'
