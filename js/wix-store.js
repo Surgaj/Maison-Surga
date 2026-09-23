@@ -339,8 +339,7 @@
     try {
       const products = (await queryProducts()).filter(product =>
         product.visible !== false &&
-        config.curatedIds.includes(product.id) &&
-        (product.directCategoriesInfo?.categories || []).some(category => category.id === config.id)
+        config.curatedIds.includes(product.id)
       );
 
       const cards = await Promise.all(products.map(async product => {
