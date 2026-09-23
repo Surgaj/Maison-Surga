@@ -36,6 +36,9 @@ jobs:
             page.on('pageerror',e=>logs.push('pageerror: '+e.message));
             page.on('requestfailed',r=>logs.push('requestfailed: '+r.url()+' '+(r.failure()?.errorText||'')));
             await page.goto('https://surgaj.github.io/Maison-Surga/product.html?e2e=cart-v18',{waitUntil:'networkidle2',timeout:60000});
+            const storefrontUrl = new URL(page.url());
+            assert(storefrontUrl.protocol==='https:','Storefront is not being served over HTTPS');
+            assert(['surgaj.github.io','www.maisonsurga.com','maisonsurga.com'].includes(storefrontUrl.hostname),'Storefront resolved to an unexpected host');
             await page.waitForFunction(()=>document.querySelector('#add-to-bag')?.textContent.includes('Add to bag'),{timeout:30000});
             const initial=await page.evaluate(()=>({
               price:document.querySelector('#product-price')?.textContent,
@@ -190,7 +193,8 @@ jobs:
                 internal:[...document.querySelectorAll('.product-card')].every(a=>a.getAttribute('href')?.startsWith('product.html?id='))
               }));
               console.log('CATEGORY_'+category.toUpperCase(),navState);
-              assert(navState.url.startsWith('https://surgaj.github.io/Maison-Surga/collection.html'),'Category left the new storefront');
+              const categoryUrl=new URL(navState.url);
+              assert(categoryUrl.protocol==='https:' && ['surgaj.github.io','www.maisonsurga.com','maisonsurga.com'].includes(categoryUrl.hostname) && categoryUrl.pathname.endsWith('/collection.html'),'Category left the HTTPS storefront');
               assert(navState.h1 && navState.cards>=4 && navState.internal,'Category catalog did not render real internal product cards');
             }
 
