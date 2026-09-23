@@ -4,10 +4,20 @@ on:
     paths:
       - ".github/workflows/probe-live-domain.yml"
   workflow_dispatch:
+permissions:
+  contents: read
+  pages: read
+
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - name: Read GitHub Pages status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api /repos/${{ github.repository }}/pages || true
+
       - name: Probe DNS and HTTPS
         shell: bash
         run: |
@@ -20,6 +30,8 @@ jobs:
           dig +short checkout.maisonsurga.com
           echo "WWW_HTTPS"
           curl -LIsS --max-time 20 https://www.maisonsurga.com/ | head -20
+          echo "WWW_HTTPS_INSECURE_PROBE"
+          curl -kLIsS --max-time 20 https://www.maisonsurga.com/ | head -20
           echo "APEX_HTTPS"
           curl -LIsS --max-time 20 https://maisonsurga.com/ | head -20
           echo "CHECKOUT_HTTPS"
