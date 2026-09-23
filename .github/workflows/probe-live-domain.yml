@@ -1,0 +1,26 @@
+name: Probe Maison Surga Live Domains
+on:
+  push:
+    paths:
+      - ".github/workflows/probe-live-domain.yml"
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe DNS and HTTPS
+        shell: bash
+        run: |
+          set +e
+          echo "WWW_DNS"
+          dig +short www.maisonsurga.com
+          echo "APEX_DNS"
+          dig +short maisonsurga.com
+          echo "CHECKOUT_DNS"
+          dig +short checkout.maisonsurga.com
+          echo "WWW_HTTPS"
+          curl -LIsS --max-time 20 https://www.maisonsurga.com/ | head -20
+          echo "APEX_HTTPS"
+          curl -LIsS --max-time 20 https://maisonsurga.com/ | head -20
+          echo "CHECKOUT_HTTPS"
+          curl -LIsS --max-time 20 https://checkout.maisonsurga.com/ | head -20
