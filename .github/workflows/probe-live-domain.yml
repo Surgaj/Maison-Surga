@@ -24,8 +24,16 @@ jobs:
           set +e
           echo "WWW_DNS"
           dig +short www.maisonsurga.com
+          echo "WWW_AAAA"
+          dig AAAA +short www.maisonsurga.com
           echo "APEX_DNS"
           dig +short maisonsurga.com
+          echo "APEX_AAAA"
+          dig AAAA +short maisonsurga.com
+          echo "APEX_CAA"
+          dig CAA +short maisonsurga.com
+          echo "WWW_CAA"
+          dig CAA +short www.maisonsurga.com
           echo "CHECKOUT_DNS"
           dig +short checkout.maisonsurga.com
           echo "WWW_HTTPS"
