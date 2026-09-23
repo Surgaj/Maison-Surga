@@ -951,9 +951,9 @@
       }
 
       const mediaItems = product.media?.itemsInfo?.items || [];
-      const images = mediaItems.map(item => item?.image?.url).filter(Boolean);
-      const fallback = productImage(product);
-      if (!images.length && fallback) images.push(fallback);
+      const mainImage = productImage(product);
+      const galleryImages = mediaItems.map(item => item?.image?.url).filter(Boolean);
+      const images = [mainImage, ...galleryImages].filter((url, index, all) => url && all.indexOf(url) === index);
       if (gallery && images.length) {
         gallery.innerHTML = images.slice(0,6).map((url,index) => `<img src="${url}" alt="${product.name}${index ? ' view '+(index+1) : ''}" ${index ? 'loading="lazy"' : ''}>`).join('');
         if (thumbs) thumbs.innerHTML = images.slice(0,6).map((url,index) => `<button type="button" aria-label="View image ${index+1}" aria-current="${index===0}"><img src="${url}" alt=""></button>`).join('');
