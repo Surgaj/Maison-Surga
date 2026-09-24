@@ -951,7 +951,16 @@
 
       const mediaItems = product.media?.itemsInfo?.items || [];
       const mainImage = productImage(product);
-      const galleryImages = mediaItems.map(item => item?.image?.url).filter(Boolean);
+      const cleanGalleryItems = mediaItems.filter(item => {
+        const image = item?.image;
+        if (!image?.url) return false;
+        const width = Number(image.width || 0);
+        const height = Number(image.height || 0);
+        if (!width || !height) return true;
+        const ratio = width / height;
+        return ratio >= 0.55 && ratio <= 1.8;
+      });
+      const galleryImages = cleanGalleryItems.map(item => item.image.url);
       const images = [mainImage, ...galleryImages].filter((url, index, all) => url && all.indexOf(url) === index);
       if (gallery && images.length) {
         gallery.innerHTML = images.slice(0,6).map((url,index) => `<img src="${url}" alt="${product.name}${index ? ' view '+(index+1) : ''}" ${index ? 'loading="lazy"' : ''}>`).join('');
